@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { randomBytes, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { gunzipSync, gzipSync } from 'node:zlib';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -1394,6 +1394,174 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
     ).resolves.toBeTruthy();
   });
 
+  it('actions an old force-release report without changing an anonymised profile', async () => {
+    const now = new Date('2026-08-19T00:30:00.000Z');
+    const target = await upsertProfile(db, `anonymised-report-target-${randomUUID()}`);
+    const moderator = await upsertProfile(db, `anonymised-report-moderator-${randomUUID()}`);
+    await db
+      .update(profiles)
+      .set({ role: 'moderator' })
+      .where(eq(profiles.userId, moderator.userId));
+    await claimHandle(db, { now: () => now }, target.userId, `o${randomUUID().slice(0, 8)}`);
+    const report = await fileReport(db, ctx({ clock: { now: () => now } }), {
+      ip: '198.51.100.230',
+      targetUserId: target.userId,
+      reasonCode: 'handle_offensive',
+      details: 'action after deletion',
+    });
+    await anonymiseProfile(db, { now: () => new Date(now.getTime() + 1) }, target.userId);
+
+    await expect(
+      moderateReport(db, { now: () => new Date(now.getTime() + 2) }, {
+        actorUserId: moderator.userId,
+        reportId: report.id,
+        action: 'force_release_handle',
+        reasonCode: 'offensive',
+        reasonText: 'Release the reported handle',
+      }),
+    ).resolves.toMatchObject({ status: 'actioned' });
+
+    const targetAfter = await db
+      .select()
+      .from(profiles)
+      .where(eq(profiles.userId, target.userId))
+      .then((rows) => rows[0]);
+    expect(targetAfter).toMatchObject({ status: 'anonymised' });
+    expect(targetAfter?.handle).toMatch(/^d-[0-9a-f]{12,13}$/);
+    expect(
+      await db.select().from(moderationActions).where(eq(moderationActions.reportId, report.id)),
+    ).toHaveLength(1);
+    expect(
+      await db
+        .select()
+        .from(auditEvents)
+        .where(
+          and(
+            eq(auditEvents.action, 'moderation.force_release_handle'),
+            eq(auditEvents.target, target.userId),
+          ),
+        ),
+    ).toHaveLength(1);
+  });
+
+  it('removes a force-released handle from live rankings and dirties its season', async () => {
+    const recomputedAt = new Date('2026-08-19T01:00:00.000Z');
+    const releasedAt = new Date(recomputedAt.getTime() + 31_000);
+    const { season, sg } = await createIsolatedSeason(
+      db,
+      `live-release-${randomUUID().slice(0, 8)}`,
+    );
+    const target = await upsertProfile(db, `live-release-target-${randomUUID()}`);
+    const moderator = await upsertProfile(db, `live-release-moderator-${randomUUID()}`);
+    await db
+      .update(profiles)
+      .set({ role: 'moderator' })
+      .where(eq(profiles.userId, moderator.userId));
+    const offensiveHandle = `x${randomUUID().slice(0, 8)}`;
+    await claimHandle(db, { now: () => recomputedAt }, target.userId, offensiveHandle);
+    await insertVerifiedBest(db, target.userId, sg.id, 444n);
+    await recomputeSeason(db, { now: () => recomputedAt }, season.id, { force: true });
+    const report = await fileReport(db, ctx({ clock: { now: () => releasedAt } }), {
+      ip: '198.51.100.231',
+      targetUserId: target.userId,
+      reasonCode: 'handle_offensive',
+      details: 'remove from live boards',
+    });
+
+    await moderateReport(db, { now: () => releasedAt }, {
+      actorUserId: moderator.userId,
+      reportId: report.id,
+      action: 'force_release_handle',
+      reasonCode: 'offensive',
+      reasonText: 'Release the reported handle',
+    });
+
+    const dirty = await db
+      .select()
+      .from(rankingDirty)
+      .where(eq(rankingDirty.seasonId, season.id))
+      .then((rows) => rows[0]);
+    expect(dirty?.dirtyAt).toEqual(releasedAt);
+    const board = await readLeaderboard(db, season.id, sg.id, {
+      viewerUserId: target.userId,
+    });
+    const standings = await readStandings(db, season.id);
+    expect(board.rows.find((row) => row.userId === target.userId)?.handle).toBeNull();
+    expect(board.viewer?.handle).toBeNull();
+    expect(standings.rows.find((row) => row.userId === target.userId)?.handle).toBeNull();
+    expect(JSON.stringify({ board, standings })).not.toContain(offensiveHandle);
+
+    await expect(recomputeSeason(db, { now: () => releasedAt }, season.id)).resolves.toBe(true);
+    const liveSnapshots = await db
+      .select()
+      .from(rankingSnapshots)
+      .where(
+        and(eq(rankingSnapshots.seasonId, season.id), eq(rankingSnapshots.frozen, false)),
+      );
+    for (const snapshot of liveSnapshots) {
+      const rows = (snapshot.payload as { rows: Array<{ userId: string; handle: string | null }> })
+        .rows;
+      expect(rows.find((row) => row.userId === target.userId)?.handle).toBeNull();
+    }
+  });
+
+  it('overlays a force-released handle on frozen rankings without changing snapshot bytes', async () => {
+    const frozenAt = new Date('2026-08-19T02:00:00.000Z');
+    const { season, sg } = await createIsolatedSeason(
+      db,
+      `frozen-release-${randomUUID().slice(0, 8)}`,
+    );
+    const target = await upsertProfile(db, `frozen-release-target-${randomUUID()}`);
+    const moderator = await upsertProfile(db, `frozen-release-moderator-${randomUUID()}`);
+    await db
+      .update(profiles)
+      .set({ role: 'moderator' })
+      .where(eq(profiles.userId, moderator.userId));
+    const offensiveHandle = `y${randomUUID().slice(0, 8)}`;
+    await claimHandle(db, { now: () => frozenAt }, target.userId, offensiveHandle);
+    await insertVerifiedBest(db, target.userId, sg.id, 555n);
+    const report = await fileReport(db, ctx({ clock: { now: () => frozenAt } }), {
+      ip: '198.51.100.232',
+      targetUserId: target.userId,
+      reasonCode: 'handle_offensive',
+      details: 'remove from frozen boards',
+    });
+    await recomputeSeason(db, { now: () => frozenAt }, season.id, { force: true });
+    await closeSeason(db, { now: () => frozenAt }, season.id);
+    const frozenBefore = await db
+      .select()
+      .from(rankingSnapshots)
+      .where(and(eq(rankingSnapshots.seasonId, season.id), eq(rankingSnapshots.frozen, true)));
+    const frozenBytes = new Map(
+      frozenBefore.map((snapshot) => [snapshot.id, JSON.stringify(snapshot.payload)]),
+    );
+
+    await moderateReport(db, { now: () => new Date(frozenAt.getTime() + 1) }, {
+      actorUserId: moderator.userId,
+      reportId: report.id,
+      action: 'force_release_handle',
+      reasonCode: 'offensive',
+      reasonText: 'Release the reported handle',
+    });
+
+    const board = await readLeaderboard(db, season.id, sg.id, {
+      viewerUserId: target.userId,
+    });
+    const standings = await readStandings(db, season.id);
+    expect(board.rows.find((row) => row.userId === target.userId)?.handle).toBeNull();
+    expect(board.viewer?.handle).toBeNull();
+    expect(standings.rows.find((row) => row.userId === target.userId)?.handle).toBeNull();
+    expect(JSON.stringify({ board, standings })).not.toContain(offensiveHandle);
+    const frozenAfter = await db
+      .select()
+      .from(rankingSnapshots)
+      .where(and(eq(rankingSnapshots.seasonId, season.id), eq(rankingSnapshots.frozen, true)));
+    expect(frozenAfter).toHaveLength(frozenBefore.length);
+    for (const snapshot of frozenAfter) {
+      expect(JSON.stringify(snapshot.payload)).toBe(frozenBytes.get(snapshot.id));
+    }
+  });
+
   it('exports caller data, anonymises it, and rebuilds standings as retired', async () => {
     const authUserId = `privacy-${randomUUID()}`;
     const email = `privacy-${randomUUID()}@example.com`;
@@ -1414,7 +1582,10 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
       .where(and(eq(games.slug, 'test-chamber'), eq(seasonGames.seedPolicy, 'fixed-course')))
       .then((r) => r[0]);
     await insertVerifiedBest(db, profile.userId, sg!.id, 777n);
-    const other = await upsertProfile(db, `privacy-other-${randomUUID()}`);
+    const otherEmail = `privacy-other-${randomUUID()}@example.com`;
+    const other = await upsertProfile(db, `privacy-other-${randomUUID()}`, otherEmail);
+    const otherHandle = `q${randomUUID().slice(0, 8)}`;
+    await claimHandle(db, c.clock, other.userId, otherHandle);
     await fileReport(db, c, {
       reporterUserId: profile.userId,
       ip: '198.51.100.220',
@@ -1430,6 +1601,11 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
     expect(exported.verifiedResults[0]?.score).toBe('777');
     expect(exported.reportsFiled).toHaveLength(1);
     expect(exported.auditEvents).not.toHaveLength(0);
+    expect(exported.reportsFiled[0]).not.toHaveProperty('reporterIpHash');
+    const serializedExport = JSON.stringify(exported);
+    expect(serializedExport).not.toContain(other.userId);
+    expect(serializedExport).not.toContain(otherEmail);
+    expect(serializedExport).not.toContain(otherHandle);
 
     await anonymiseProfile(db, c.clock, profile.userId);
     const anonymised = await db
@@ -1513,6 +1689,26 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
       await pool.query(`DROP TRIGGER IF EXISTS ${triggerName} ON audit_events`);
       await pool.query(`DROP FUNCTION IF EXISTS ${functionName}()`);
     }
+  });
+
+  it('retries anonymisation when the deterministic handle is already occupied', async () => {
+    const victim = await upsertProfile(db, `privacy-collision-victim-${randomUUID()}`);
+    const occupant = await upsertProfile(db, `privacy-collision-occupant-${randomUUID()}`);
+    const prefix = createHash('sha256').update(victim.userId).digest('hex').slice(0, 12);
+    const occupiedHandle = `d-${prefix}`;
+    await db
+      .update(profiles)
+      .set({ handle: occupiedHandle })
+      .where(eq(profiles.userId, occupant.userId));
+
+    const anonymised = await anonymiseProfile(db, c.clock, victim.userId);
+
+    expect(anonymised).toMatchObject({
+      userId: victim.userId,
+      status: 'anonymised',
+      handle: `${occupiedHandle}0`,
+    });
+    expect(anonymised.handle).toMatch(/^d-[0-9a-f]{12,13}$/);
   });
 });
 
