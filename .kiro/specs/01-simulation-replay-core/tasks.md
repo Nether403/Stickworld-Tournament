@@ -1,7 +1,7 @@
 # Spec 1 — Tasks
 
-**Execute in order.** Each task ends in a demonstrable increment. Task 2 contains the project's
-key fork and its result is reported to the user before anything downstream proceeds.
+**Complete.** Merged to `main` via PR #1 (2026-08-18). Branch A. Do not reopen
+except for competition-affecting ADRs.
 
 Legend: `[ ]` not started · `[~]` in progress · `[x]` done
 Requirement references point at `requirements.md`.

@@ -1,40 +1,42 @@
-# Stickworld Tournament — Spec Index
+# Specs
 
-Five specs, executed in order, each revised in light of the previous one's outcome.
+Specs execute in order. Do not start a spec's implementation until its design is
+**approved** and every earlier spec's definition of done is green.
 
 | Spec | Title | Depth | Plan tasks | Status |
 |---|---|---|---|---|
-| [01](./01-simulation-replay-core/) | Deterministic Simulation and Replay Core | **full** | 1–4 | Task 1 complete; Tasks 2–4 in progress |
-| [02](./02-tournament-platform-ranking/) | Tournament Platform and Ranking | scope | 5–9, 11, 13 | authored, **revise after Spec 1** |
-| [03](./03-game-production-kit/) | Game Production Kit and Reference Game | scope | 10, 12, 14 | authored |
-| [04](./04-roster-production/) | Roster Production (games 3–10) | scope | 15–18 | authored |
-| [05](./05-assets-integrity-operations-launch/) | Assets, Integrity, Operations, Launch | scope | 19–24 | authored |
+| [01](./01-simulation-replay-core/) | Deterministic Simulation and Replay Core | **full** | 1–4 | **done, merged to `main`** ([PR #1](https://github.com/Nether403/Stickworld-Tournament/pull/1)) |
+| [02](./02-tournament-platform-ranking/) | Tournament Platform and Ranking | **full** | 5–9, 11, 13 | design written; **awaiting approval** before execution |
+| [03](./03-game-production-kit/) | Game Production Kit and Reference Game | scope | 10, 12, 14 | blocked on Spec 2 |
+| [04](./04-roster-production/) | Roster Production (games 3–10) | scope | 15–18 | blocked on Specs 1–3 |
+| [05](./05-assets-integrity-operations-launch/) | Assets, Integrity, Operations, Launch | scope | 19–24 | blocked on Specs 1–4 |
 
-Plus a non-spec parallel track: [`docs/legal/brand-and-ip-clearance.md`](../../docs/legal/brand-and-ip-clearance.md) — starts now, long lead times, gates naming.
+Plus a non-spec parallel track: [`docs/legal/brand-and-ip-clearance.md`](../../docs/legal/brand-and-ip-clearance.md) — started, long lead times, gates naming.
+
+**Vendors (locked):** Neon (Postgres + Auth + Branches) + Railway (web, worker, cron). No other cloud.
+
+**Auth (Spec 2):** Google + GitHub via Neon Managed Better Auth. Discord login is **not** in Spec 2 (Neon CLI first-party providers are `google`, `github`, `vercel`). See `docs/adr/0004-spec2-platform-stack.md`.
+
+Spec 2's worker calls `@stickworld/replay` (`decodeReplay` + `playReplay`) and registers Test Chamber at `registry_id = 0`. Spec 1 delivered both. Execution of Spec 2 still waits on human approval of the design.
 
 ---
 
-## Why the depths differ
+## Why Spec 1 was full depth and 3–5 are still scope
 
-Spec 1 is written at full implementable depth. Specs 2–5 are written at scope-and-contract depth
-deliberately, because **Spec 1 contains a fork.** If the determinism harness finds divergence
-between runtimes, the verification model changes shape — which changes the attempt lifecycle,
-which changes Spec 2's schema and the verified-versus-provisional states everything downstream
-depends on. Writing implementation detail now risks writing it twice.
+Spec 1 contained a determinism fork. That fork is **resolved: Branch A**. Specs 2–5 do not need a determinism-axis rewrite.
 
-The user's chosen sequence: author all five so the full shape is visible, execute Spec 1, then
-revise Spec 2 in light of the result, and repeat the land-then-revise cycle down the chain.
+Spec 2 is now full depth because the worker runtime, schema, and verification pipeline are no longer hypothetical.
+
+Specs 3–5 stay at scope-and-contract depth until Spec 2 lands: they depend on the `/v1` attempt lifecycle, auth, and ranking snapshots, not on physics. Writing Phaser kit and roster implementation detail before the platform exists still risks writing it twice. Same land-then-revise cycle as before, just starting from a known Branch A.
 
 ---
 
 ## Execution order
 
 ```
-Spec 1  ──► determinism fork resolved, ADR-0001 written
-   │
-   │  ◄── REPORT TO USER, STOP
+Spec 1  ──► Branch A, merged to main
    ▼
-Spec 2  revise for the chosen branch → approve → execute
+Spec 2  full-depth design ──► REPORT TO USER, STOP until approved ──► execute
    ▼
 Spec 3  revise → approve → execute
    ▼
@@ -42,10 +44,6 @@ Spec 4  revise → approve → execute
    ▼
 Spec 5  revise → approve → execute → launch
 ```
-
-The one branch that changes Spec 2's shape rather than just its wording is **B1** (Node diverges,
-browsers agree): the validation worker then runs headless Chromium under Playwright instead of
-Node. Schema and API survive; worker runtime, image size, cost, and throughput all change.
 
 ---
 
@@ -55,8 +53,8 @@ A browser-based competitive platform hosting ten original single-player stickman
 Each game has a verified leaderboard; one championship ranking spans all ten. The hard problem is
 not the games — it is score trust. The browser belongs to the player, so a client-reported score
 is worthless. Every trust claim depends on the server independently recomputing each score from
-recorded inputs, which requires bit-identical physics in browser and server. That is an assumption
-the research asserts but does not prove, and Spec 1 exists to settle it.
+recorded inputs, which requires bit-identical physics in browser and server. Spec 1 proved that
+for one pinned Rapier `-compat` 0.20.0 build.
 
 ---
 
@@ -64,24 +62,25 @@ the research asserts but does not prove, and Spec 1 exists to settle it.
 
 | Decision | Choice |
 |---|---|
-| Database / Auth | Neon (Lakebase Postgres + managed Auth, which is managed Better Auth) |
-| Hosting | Railway — shell, API, worker, cron as services in one project |
+| Database / Auth | Neon (Postgres + Managed Better Auth) |
+| Hosting | Railway — `web`, `worker`, cron in one project |
 | Vendor count | **Capped at 2.** No Redis, no separate queue, no object store at launch |
 | Ranked format | Both — fixed courses for the championship, plus a daily-seeded ladder |
 | Stakes | Bragging rights only. No prizes, no KYC |
 | Live PvP | Out of scope, but must stay architecturally possible without a rewrite |
+| Launch OAuth | Google + GitHub (not Discord) |
 
 Consequences: replays are Postgres `bytea` (Neon Object Storage is Beta — keep it off the
 integrity path); the job queue is a Postgres table consumed with `FOR UPDATE SKIP LOCKED`; auth is
-OAuth-only (Google + Discord) because magic links need an email sender, which would be vendor
-three; and there is **no CDN at launch** — an accepted, recorded gap.
+OAuth-only because magic links need an email-dependent flow we are not designing; and there is
+**no CDN at launch** — an accepted, recorded gap.
 
 ---
 
 ## Standing constraints for anyone working in this repo
 
 - Never read, echo, log, or commit anything under `Credentials/`. Reference keys by name only.
-- No GitHub remote and no push without explicit user confirmation. Local `git init` is fine.
+- Do not force-push `main`. Feature work goes on `cursor/*` branches.
 - No new dependencies beyond those named in the specs without flagging it. Pin exact versions.
 - **The Rapier version and build variant are pinned and must not be bumped casually.** A version
   bump invalidates historical replays and is a competition-affecting change.
@@ -100,8 +99,8 @@ the spec wins.** Recorded here so these do not get relitigated.
 
 1. **Rapier is not cross-platform deterministic by default.** Two research documents claim it is.
    Rapier's own docs say it is *locally* deterministic and that two different computers may produce
-   completely different results. Cross-platform determinism is conditional. Spec 1 proves it
-   empirically.
+   completely different results. Spec 1 proved one pinned `-compat` WASM **is** bit-identical
+   across Node and the Playwright browsers (Branch A).
 2. **The research's reason for rejecting JS physics is wrong.** JS `+ - * /` and `Math.sqrt` on
    doubles are IEEE-754 exact and deterministic. The real threats are `Math.sin/cos/tan/pow/exp/log`
    (implementation-defined per ECMAScript), variable timestep, unstable iteration order, and SIMD
