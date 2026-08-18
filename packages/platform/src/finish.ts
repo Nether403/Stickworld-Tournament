@@ -131,6 +131,14 @@ export async function finishAttempt(
   hashBytes.writeBigUInt64LE(decoded.header.finalStateHash);
 
   await db.transaction(async (tx) => {
+    const lockedSeason = await tx
+      .select({ status: seasons.status })
+      .from(seasons)
+      .where(eq(seasons.id, attemptWithSeason.seasons.id))
+      .for('update')
+      .then((rows) => rows[0]);
+    if (lockedSeason?.status !== 'active') throw new ApiError('SEASON_INACTIVE');
+
     const updated = await tx
       .update(attempts)
       .set({ status: 'submitted', consumedAt: now })
