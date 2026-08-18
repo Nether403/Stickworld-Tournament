@@ -15,7 +15,9 @@
     "determinism:node": "pnpm --filter @stickworld/sim-core determinism:node",
     "determinism:browser": "pnpm --filter @stickworld/sim-core determinism:browser",
     "replay:verify": "node packages/replay/dist/bin/replay-verify.js",
-    "score:browser": "pnpm --filter @stickworld/game-test-chamber score:browser"
+    "score:browser": "pnpm --filter @stickworld/game-test-chamber score:browser",
+    "db:migrate": "pnpm --filter @stickworld/db migrate",
+    "db:seed": "pnpm --filter @stickworld/db seed"
   },
   "pnpm": {
     "onlyBuiltDependencies": ["esbuild"]

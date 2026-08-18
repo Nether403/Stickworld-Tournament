@@ -503,6 +503,5 @@ later:
 - The rejection reason taxonomy (§8.5) becomes the `verification_status` reason enum.
 - Verification = decode → re-simulate → compare score and final state hash. Spec 2 wraps this in
   a worker and a queue; it does not reimplement it.
-- **If the fork lands on Branch B1, Spec 2's worker runs headless Chromium instead of Node.**
-  This is the one place a fork outcome changes Spec 2's shape, which is precisely why Spec 2 is
-  written at scope depth and revised after Task 2.
+- The fork landed on **Branch A**. Spec 2's worker is Node. Spec 2 is now full depth
+  (`.kiro/specs/02-tournament-platform-ranking/`).

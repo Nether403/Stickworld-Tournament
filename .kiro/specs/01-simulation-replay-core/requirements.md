@@ -1,6 +1,6 @@
 # Spec 1 — Deterministic Simulation and Replay Core
 
-**Status:** Task 1 complete; executing Tasks 2–4
+**Status:** complete; merged to `main` (PR #1, 2026-08-18). Branch A.
 **Depth:** full (implementable directly)
 **Covers:** Plan tasks 1–4
 **Blocks:** Specs 2, 3, 4, 5

@@ -7,6 +7,10 @@
     ".": {
       "types": "./dist/src/index.d.ts",
       "import": "./dist/src/index.js"
+    },
+    "./decode": {
+      "types": "./dist/src/decode.d.ts",
+      "import": "./dist/src/decode.js"
     }
   },
   "scripts": {

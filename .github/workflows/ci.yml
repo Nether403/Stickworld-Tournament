@@ -4,6 +4,7 @@ on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   verify:
@@ -65,3 +66,43 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @stickworld/sim-core exec vitest run tests/stress-01.test.ts
+
+  schema:
+    name: schema
+    needs: verify
+    runs-on: ubuntu-latest
+    env:
+      NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+      NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Require Neon secrets (skip forks)
+        id: neon
+        run: |
+          echo "NEON_API_KEY is $( [ -n "$NEON_API_KEY" ] && echo set || echo empty )"
+          echo "NEON_PROJECT_ID is $( [ -n "$NEON_PROJECT_ID" ] && echo set || echo empty )"
+          if [ -z "$NEON_API_KEY" ] || [ -z "$NEON_PROJECT_ID" ]; then
+            if [ "${{ github.event.pull_request.head.repo.fork }}" = "true" ]; then
+              echo "Skipping schema job on fork (no secrets)."
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "NEON_API_KEY and NEON_PROJECT_ID are required on this repository."
+            echo "They must be repository Actions *secrets* (Settings → Secrets and variables → Actions → Secrets), named exactly those two identifiers, not Actions variables."
+            echo "If they are already saved, re-run this job from the Actions UI as a collaborator so GitHub injects them."
+            exit 1
+          fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+      - if: steps.neon.outputs.skip != 'true'
+        run: pnpm install --frozen-lockfile
+      - if: steps.neon.outputs.skip != 'true'
+        run: pnpm build
+      - if: steps.neon.outputs.skip != 'true'
+        run: pnpm --filter @stickworld/db ci-schema
