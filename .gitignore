@@ -100,6 +100,9 @@ determinism-report/
 *.trace.json
 *.trace.json.gz
 
+# Browser harness bundles (generated from runner-browser.ts + Rapier).
+**/conformance/page/harness.js
+
 # ---------------------------------------------------------------------------
 # Generated assets.
 # Gemini art and Deepgram audio are produced at build time from committed

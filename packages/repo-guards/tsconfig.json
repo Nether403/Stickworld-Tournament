@@ -1,0 +1,10 @@
+{
+  "extends": "@stickworld/config-ts/tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"],
+    "declaration": false,
+    "declarationMap": false
+  },
+  "include": ["src/**/*.ts", "tests/**/*.ts"]
+}

@@ -4,7 +4,7 @@ Five specs, executed in order, each revised in light of the previous one's outco
 
 | Spec | Title | Depth | Plan tasks | Status |
 |---|---|---|---|---|
-| [01](./01-simulation-replay-core/) | Deterministic Simulation and Replay Core | **full** | 1–4 | authored, awaiting approval to execute |
+| [01](./01-simulation-replay-core/) | Deterministic Simulation and Replay Core | **full** | 1–4 | Task 1 complete; Tasks 2–4 in progress |
 | [02](./02-tournament-platform-ranking/) | Tournament Platform and Ranking | scope | 5–9, 11, 13 | authored, **revise after Spec 1** |
 | [03](./03-game-production-kit/) | Game Production Kit and Reference Game | scope | 10, 12, 14 | authored |
 | [04](./04-roster-production/) | Roster Production (games 3–10) | scope | 15–18 | authored |

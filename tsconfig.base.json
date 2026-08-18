@@ -1,0 +1,3 @@
+{
+  "extends": "@stickworld/config-ts/tsconfig.base.json"
+}

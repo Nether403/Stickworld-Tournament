@@ -1,0 +1,31 @@
+{
+  "name": "@stickworld/sim-core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "src"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "determinism:node": "vitest run tests/golden.test.ts",
+    "determinism:bundle": "esbuild conformance/runner-browser.ts --bundle --format=iife --outfile=conformance/page/harness.js",
+    "determinism:browser": "pnpm determinism:bundle && playwright test --config playwright.config.ts"
+  },
+  "dependencies": {
+    "@dimforge/rapier2d-compat": "0.20.0"
+  },
+  "devDependencies": {
+    "@stickworld/config-ts": "workspace:*",
+    "typescript": "5.9.3",
+    "vitest": "3.2.7",
+    "@playwright/test": "1.62.1",
+    "esbuild": "0.28.2"
+  }
+}
