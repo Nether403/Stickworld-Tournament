@@ -15,7 +15,7 @@ const connectSources = ["'self'", neonAuthOrigin(), 'https://accounts.google.com
 );
 const contentSecurityPolicy = [
   "default-src 'self'",
-  "script-src 'self' 'wasm-unsafe-eval'",
+  "script-src 'self' 'wasm-unsafe-eval' 'unsafe-inline'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data:",
   `connect-src ${connectSources.join(' ')}`,
@@ -25,6 +25,7 @@ const contentSecurityPolicy = [
 ].join('; ');
 
 const nextConfig: NextConfig = {
+  allowedDevOrigins: ['127.0.0.1'],
   transpilePackages: [
     '@stickworld/platform',
     '@stickworld/db',

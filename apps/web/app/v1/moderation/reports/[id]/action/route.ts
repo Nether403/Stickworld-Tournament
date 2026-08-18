@@ -20,9 +20,9 @@ export async function POST(
 ): Promise<Response> {
   try {
     const identity = await authIdentity();
+    if (!identity.id) throw new ApiError('FORBIDDEN');
     const db = getDb();
-    const actor = identity.id ? await upsertProfile(db, identity.id, identity.email) : undefined;
-    if (!actor) throw new ApiError('FORBIDDEN');
+    const actor = await upsertProfile(db, identity.id, identity.email);
     await requireModerator(db, actor.userId);
     const body = (await req.json().catch(() => ({}))) as {
       action?: ModerationAction;
