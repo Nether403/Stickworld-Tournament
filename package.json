@@ -11,7 +11,11 @@
     "typecheck": "turbo run typecheck",
     "test": "vitest run",
     "build": "turbo run build",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "determinism:node": "pnpm --filter @stickworld/sim-core determinism:node",
+    "determinism:browser": "pnpm --filter @stickworld/sim-core determinism:browser",
+    "replay:verify": "node packages/replay/dist/bin/replay-verify.js",
+    "score:browser": "pnpm --filter @stickworld/game-test-chamber score:browser"
   },
   "pnpm": {
     "onlyBuiltDependencies": ["esbuild"]
