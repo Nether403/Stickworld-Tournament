@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { GameHost, createRankedClient, type HostPhase, type PlayMode } from '@stickworld/game-host';
-import type { ScoreEvent } from '@stickworld/sim-core';
+import type { GameView } from '@stickworld/game-host';
+import type { ScoreEvent, StickworldGame } from '@stickworld/sim-core';
 import {
   Countdown,
   LeaderboardWidget,
@@ -11,7 +12,6 @@ import {
   ResultsTable,
   tokens,
 } from '@stickworld/ui';
-import { HOOKLINE_INSTRUCTIONS } from './copy';
 
 interface FrameSnap {
   score: number;
@@ -20,13 +20,28 @@ interface FrameSnap {
   events: readonly ScoreEvent[];
 }
 
-export default function PlayIsland(props: { slug: string; mode: PlayMode }) {
+export interface MountedClient {
+  view: GameView;
+  destroy(): void;
+}
+
+export function PlayShell(props: {
+  title: string;
+  instructions: string;
+  stageTestId: string;
+  slug: string;
+  mode: PlayMode;
+  mount: (
+    parent: HTMLElement,
+    hostRef: { current?: GameHost },
+  ) => Promise<{ game: StickworldGame; mounted: MountedClient }>;
+}): ReactNode {
   const parentRef = useRef<HTMLDivElement>(null);
   const hostRef = useRef<GameHost | undefined>(undefined);
   const [phase, setPhase] = useState<HostPhase>('idle');
   const [frame, setFrame] = useState<FrameSnap>({ score: 0, tick: 0, finished: false, events: [] });
-  const [error, setError] = useState<string>('');
-  const [verify, setVerify] = useState<string>('');
+  const [error, setError] = useState('');
+  const [verify, setVerify] = useState('');
   const [countdown, setCountdown] = useState(3);
   const [seasonId, setSeasonId] = useState('');
 
@@ -36,29 +51,17 @@ export default function PlayIsland(props: { slug: string; mode: PlayMode }) {
     let cancelled = false;
     let destroyClient: (() => void) | undefined;
     let host: GameHost | undefined;
-
     void (async () => {
       try {
-        if (props.slug !== 'hookline-sprint') {
-          setError('That game is not available yet.');
+        const box = { current: undefined as GameHost | undefined };
+        const { game, mounted } = await props.mount(parent, box);
+        if (cancelled) {
+          mounted.destroy();
           return;
         }
-        const [{ hooklineSprintGame }, { mountHooklineClient }] = await Promise.all([
-          import('@stickworld/game-hookline-sprint'),
-          import('@stickworld/game-hookline-sprint/client'),
-        ]);
-        if (cancelled) return;
-        const mounted = mountHooklineClient(parent, {
-          onAim(deg) {
-            host?.input(1, deg);
-          },
-          onHook(value) {
-            host?.input(2, value);
-          },
-        });
         destroyClient = mounted.destroy;
         host = new GameHost({
-          game: hooklineSprintGame,
+          game,
           slug: props.slug,
           mode: props.mode,
           view: {
@@ -76,6 +79,7 @@ export default function PlayIsland(props: { slug: string; mode: PlayMode }) {
             },
           },
         });
+        box.current = host;
         hostRef.current = host;
         await host.start();
       } catch (err) {
@@ -83,14 +87,13 @@ export default function PlayIsland(props: { slug: string; mode: PlayMode }) {
         setError(message === 'UNAUTHENTICATED' ? 'Sign in required for ranked play.' : message);
       }
     })();
-
     return () => {
       cancelled = true;
       host?.dispose();
       destroyClient?.();
       hostRef.current = undefined;
     };
-  }, [props.slug, props.mode]);
+  }, [props.slug, props.mode, props.mount]);
 
   useEffect(() => {
     if (phase !== 'countdown') return;
@@ -144,9 +147,9 @@ export default function PlayIsland(props: { slug: string; mode: PlayMode }) {
 
   return (
     <div style={{ fontFamily: tokens.font, color: tokens.ink, background: tokens.bg, minHeight: '100vh', padding: 16 }}>
-      <h1>Hookline Sprint</h1>
+      <h1>{props.title}</h1>
       <p data-testid="instructions" style={{ maxWidth: 720, color: tokens.muted, whiteSpace: 'pre-wrap' }}>
-        {HOOKLINE_INSTRUCTIONS}
+        {props.instructions}
       </p>
       <p>
         Mode: {props.mode} · Phase: {phase} · Score: {frame.score} · Tick: {frame.tick}
@@ -173,7 +176,7 @@ export default function PlayIsland(props: { slug: string; mode: PlayMode }) {
       ) : null}
       <div
         ref={parentRef}
-        data-testid="hookline-stage"
+        data-testid={props.stageTestId}
         style={{ width: 'min(960px, 100%)', height: 540, background: tokens.bg }}
       />
       {phase === 'results' ? (

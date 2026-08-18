@@ -22,6 +22,7 @@
     "@stickworld/db": "workspace:*",
     "@stickworld/game-test-chamber": "workspace:*",
     "@stickworld/game-hookline-sprint": "workspace:*",
+    "@stickworld/game-pickaxe-ascent": "workspace:*",
     "@stickworld/replay": "workspace:*",
     "@stickworld/sim-core": "workspace:*",
     "drizzle-orm": "0.45.2",

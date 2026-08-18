@@ -128,13 +128,20 @@ Fill during Task 3. If GameHost, `/v1`, or schema must change, **stop**.
 
 | Date | Finding | Disposition |
 |---|---|---|
-| | | |
+| 2026-08-18 | `createKinematicCuboid`, `setKinematicAngle`, and `setKinematicTranslation` added to `physics-kit`. Hookline does not use them. | Expected (Task 3.2). Logged; no GameHost change. |
+| 2026-08-18 | Pickaxe collider is a **sensor** so the kinematic body cannot shove the climber (they overlap every tick). | Kit usage; not a host/API change. |
+| 2026-08-18 | Attach joints to the **ledge body** with a local-space hit anchor instead of spawning a dedicated hit-point body (that would reorder `SimWorld` after tick 0). | Kit usage; registry-stable. |
+| 2026-08-18 | First ledge centre (3.2, 3.5) is ~2.5 m from the spawn pick origin; even with the 1.20 m shaft fully forward plus a 0.45 m tip ray the bite is ~0.5 m short. v1 therefore cannot checkpoint from spawn without changing frozen geometry or `ATTACH_RANGE`. | Recorded. Sample is an honest on-floor altitude run. Scoring formulas still have unit tests. Did **not** edit GameHost, `/v1`, or schema. |
+| 2026-08-18 | `/play/[slug]` put both game islands on one Next page client graph. Split to `/play/hookline-sprint` and `/play/pickaxe-ascent` pages so lazy-load is a real module boundary. | Web routing only. No GameHost, `/v1`, or schema change. |
+| 2026-08-18 | `replay-verify` gained a registryId 2 loader; web/worker/platform `package.json` gained the Pickaxe workspace dep; `transpilePackages` lists the package. | Needed so the allowed GAMES-map import resolves. Not a host/API change. |
+
+No GameHost API, `/v1` shape, cheap-check, or schema edits.
 
 ---
 
 ## Integration effort (fill at the end of Task 3)
 
-- Hookline Task 1 wall-clock (from git dates or log):
-- Pickaxe Task 3 wall-clock:
-- New files vs Hookline:
-- New platform files (must be 0 besides seed + map):
+- Hookline Task 1 wall-clock (from git dates or log): same-day Spec 3 execution on this branch (`60f12a3` sim/goldens through `c5945f9` seed/play).
+- Pickaxe Task 3 wall-clock: same deepening branch, after the Task 2 kit extract (`df1bbfd`).
+- New files vs Hookline: `games/pickaxe-ascent/**` mirrors Hookline (manifest, sim, client, goldens, contract tests, `score:browser`).
+- New platform files (must be 0 besides seed + map): seed row + `GAMES` map line + workspace deps so those imports resolve. Tests and `replay-verify` registry case only. **Zero** schema / `/v1` / GameHost API files.

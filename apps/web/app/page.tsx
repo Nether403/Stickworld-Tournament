@@ -51,11 +51,20 @@ export default async function HomePage(): Promise<ReactNode> {
         </article>
         <article>
           <h2>Pickaxe Ascent</h2>
-          <p>Coming soon. Practice and ranked are not open yet.</p>
+          <p>Bite a ledge, swing, and climb the shaft.</p>
           <p>
-            <button type="button" disabled>
-              Practice
-            </button>
+            <Link href="/play/pickaxe-ascent">Practice</Link>
+            {signedIn ? (
+              <>
+                {' '}
+                <Link href="/play/pickaxe-ascent?mode=ranked">Ranked</Link>
+              </>
+            ) : (
+              <>
+                {' '}
+                <Link href="/auth/sign-in">Sign in to play ranked</Link>
+              </>
+            )}
           </p>
         </article>
       </section>

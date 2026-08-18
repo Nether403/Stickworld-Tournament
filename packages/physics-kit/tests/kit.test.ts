@@ -5,10 +5,13 @@ import {
   createAabbSensor,
   createFixedBall,
   createFixedCuboid,
+  createKinematicCuboid,
   createLockedCapsule,
   createRopeJoint,
   createVerticalGateSensor,
   destroyImpulseJoint,
+  setKinematicAngle,
+  setKinematicTranslation,
 } from '../src/index.ts';
 
 describe('physics-kit factories', () => {
@@ -41,6 +44,10 @@ describe('physics-kit factories', () => {
     expect(miss).toBeNull();
     const joint = createRopeJoint(sim.world, rapier, player.body, ball.body, 1);
     destroyImpulseJoint(sim.world, joint);
+    const kin = createKinematicCuboid(sim, rapier, 1, 2, 0.6, 0.04, tags, 'pickaxe', true);
+    setKinematicTranslation(kin.body, 1.1, 2.2);
+    setKinematicAngle(kin.body, 45);
+    expect(kin.collider.isSensor()).toBe(true);
     sim.free();
   });
 });

@@ -1,6 +1,12 @@
-import { hypot, SimWorld, type RapierModule } from '@stickworld/sim-core';
+import { atan, hypot, SimWorld, type RapierModule } from '@stickworld/sim-core';
 
 export type ColliderTags = Map<number, string>;
+
+const PI = 4 * atan(1);
+
+export function degreesToRadians(degrees: number): number {
+  return (degrees * PI) / 180;
+}
 
 export function tagCollider(
   tags: ColliderTags,
@@ -93,6 +99,44 @@ export function createVerticalGateSensor(
   return createAabbSensor(sim, rapier, x, 8, 0.05, 10, tags, name);
 }
 
+/** Kinematic cuboid. Spec 3 Pickaxe: pose with setKinematicAngle / setNextKinematicTranslation. */
+export function createKinematicCuboid(
+  sim: SimWorld,
+  rapier: RapierModule,
+  x: number,
+  y: number,
+  hx: number,
+  hy: number,
+  tags: ColliderTags,
+  name: string,
+  sensor: boolean,
+) {
+  const body = sim.createRigidBody(
+    rapier.RigidBodyDesc.kinematicPositionBased().setTranslation(x, y),
+  );
+  const desc = rapier.ColliderDesc.cuboid(hx, hy);
+  if (sensor) desc.setSensor(true);
+  const collider = sim.world.createCollider(desc, body);
+  tagCollider(tags, collider, name);
+  return { body, collider };
+}
+
+export function setKinematicTranslation(
+  body: { setNextKinematicTranslation: (t: { x: number; y: number }) => void },
+  x: number,
+  y: number,
+): void {
+  body.setNextKinematicTranslation({ x, y });
+}
+
+/** Degrees → radians via detmath `atan` π, then Rapier `setNextKinematicRotation`. */
+export function setKinematicAngle(
+  body: { setNextKinematicRotation: (angle: number) => void },
+  degrees: number,
+): void {
+  body.setNextKinematicRotation(degreesToRadians(degrees));
+}
+
 export function castTaggedRay(
   world: SimWorld['world'],
   rapier: RapierModule,
@@ -103,7 +147,10 @@ export function castTaggedRay(
   excludeBody: { handle: number },
   tags: ColliderTags,
   name: string,
-): { collider: { handle: number; parent: () => ReturnType<SimWorld['createRigidBody']> | null } } | null {
+): {
+  collider: { handle: number; parent: () => ReturnType<SimWorld['createRigidBody']> | null };
+  toi: number;
+} | null {
   const len = hypot(dir.x, dir.y);
   if (len === 0) return null;
   const ray = new rapier.Ray({ x: origin.x, y: origin.y }, { x: dir.x / len, y: dir.y / len });
@@ -118,7 +165,7 @@ export function castTaggedRay(
     (collider) => tags.get(collider.handle) === name,
   );
   if (!hit || tags.get(hit.collider.handle) !== name) return null;
-  return hit as never;
+  return { collider: hit.collider, toi: hit.timeOfImpact };
 }
 
 export function createRopeJoint(
@@ -127,9 +174,11 @@ export function createRopeJoint(
   bodyA: ReturnType<SimWorld['createRigidBody']>,
   bodyB: ReturnType<SimWorld['createRigidBody']>,
   restLength: number,
+  localA: { x: number; y: number } = { x: 0, y: 0 },
+  localB: { x: number; y: number } = { x: 0, y: 0 },
 ): ReturnType<SimWorld['world']['createImpulseJoint']> {
   return world.createImpulseJoint(
-    rapier.JointData.rope(restLength, { x: 0, y: 0 }, { x: 0, y: 0 }),
+    rapier.JointData.rope(restLength, localA, localB),
     bodyA,
     bodyB,
     true,

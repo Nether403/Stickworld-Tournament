@@ -14,6 +14,7 @@ Task 2 must not regenerate those files.
 - AABB **impact** sensor
 - Raycast attach onto a tagged collider
 - Rope / distance impulse joint
+- Kinematic cuboid + `setKinematicAngle` (added for Pickaxe Ascent; not used by Hookline)
 
 ## Not in Spec 3
 

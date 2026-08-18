@@ -1,15 +1,12 @@
-import type { PlayMode } from '@stickworld/game-host';
-import { PlayClient } from './play-client';
-
-export default async function PlayPage({
+export default async function UnknownPlayPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ mode?: string }>;
 }) {
   const { slug } = await params;
-  const query = await searchParams;
-  const mode: PlayMode = query.mode === 'ranked' ? 'ranked' : 'practice';
-  return <PlayClient slug={slug} mode={mode} />;
+  return (
+    <main>
+      <p role="alert">Unknown game: {slug}</p>
+    </main>
+  );
 }

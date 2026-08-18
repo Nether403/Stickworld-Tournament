@@ -1,10 +1,10 @@
 import { expect, test } from '@playwright/test';
 
-test('catalogue lists Hookline live and Pickaxe disabled, not Test Chamber', async ({ page }) => {
+test('catalogue lists Hookline and Pickaxe live, not Test Chamber', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Hookline Sprint' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Pickaxe Ascent' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Practice' })).toBeDisabled();
+  await expect(page.getByRole('link', { name: 'Practice' }).first()).toBeVisible();
   await expect(page.getByText('Test Chamber')).toHaveCount(0);
 });
 
@@ -36,5 +36,17 @@ test('practice play shows instructions and does not fetch Pickaxe', async ({ pag
   await expect(page.getByTestId('instructions')).toContainText('chevron');
   await expect(page.getByTestId('hookline-stage')).toBeVisible();
   await expect(page.getByTestId('countdown')).toBeVisible({ timeout: 60_000 });
-  expect(requested.some((url) => url.includes('pickaxe'))).toBe(false);
+  expect(requested.some((url) => /pickaxe/i.test(url))).toBe(false);
+});
+
+test('Pickaxe practice does not fetch Hookline client', async ({ page }) => {
+  const requested: string[] = [];
+  page.on('request', (req) => {
+    requested.push(req.url());
+  });
+  await page.goto('/play/pickaxe-ascent');
+  await expect(page.getByTestId('instructions')).toContainText('Hold to bite');
+  await expect(page.getByTestId('pickaxe-stage')).toBeVisible();
+  await expect(page.getByTestId('countdown')).toBeVisible({ timeout: 60_000 });
+  expect(requested.some((url) => /hookline/i.test(url))).toBe(false);
 });

@@ -650,6 +650,52 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
     expect(sub?.verificationStatus).toBe('rejected');
     expect(sub?.reasonCode).toBe('SCORE_MISMATCH');
   });
+
+  it('verifies the Pickaxe Ascent golden replay', async () => {
+    const fixturePath = resolve(
+      fileURLToPath(import.meta.url),
+      '../../../../games/pickaxe-ascent/fixtures/sample.swr',
+    );
+    const goldenPath = resolve(
+      fileURLToPath(import.meta.url),
+      '../../../../games/pickaxe-ascent/conformance/golden/sample.json',
+    );
+    const bytes = readFileSync(fixturePath);
+    const golden = JSON.parse(readFileSync(goldenPath, 'utf8')) as { score: number; hash: string };
+    const profile = await upsertProfile(db, `auth-${randomUUID()}`);
+    await claimHandle(db, c.clock, profile.userId, `p${randomUUID().slice(0, 8)}`);
+    const issueCtx = goldenEntropy();
+    const issued = await issueAttempt(db, issueCtx, {
+      userId: profile.userId,
+      gameSlug: 'pickaxe-ascent',
+      seedPolicy: 'fixed-course',
+      ip: '10.0.2.2',
+    });
+    expect(issued.seed).toEqual([5, 6, 7, 8]);
+    const decoded = await decodeReplay(bytes);
+    expect(decoded.ok).toBe(true);
+    if (!decoded.ok) return;
+    const replay = await encodeReplay(
+      { ...decoded.header, attemptId: uuidToBytes(issued.attemptId) },
+      decoded.events,
+    );
+    const finished = await finishAttempt(db, issueCtx, {
+      userId: profile.userId,
+      attemptId: issued.attemptId,
+      token: issued.token,
+      replayB64: Buffer.from(replay).toString('base64'),
+      claimedScore: String(golden.score),
+    });
+    expect(finished.status).toBe('pending');
+    await processNextJob(db, issueCtx.clock, 'worker-pickaxe', { staleLockSeconds: 0 });
+    const sub = await db
+      .select()
+      .from(scoreSubmissions)
+      .where(eq(scoreSubmissions.runId, finished.runId))
+      .then((r) => r[0]);
+    expect(sub?.verificationStatus).toBe('verified');
+    expect(sub?.verifiedScore).toBe(BigInt(golden.score));
+  });
 });
 
 async function loadOrderedThenRebuild(

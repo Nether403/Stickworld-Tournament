@@ -107,6 +107,7 @@ export async function seedDatabase(): Promise<void> {
 
     await seedGame(db, seasonRow.id, { slug: 'test-chamber', registryId: 0, maxRunTicks: 600 }, now);
     await seedGame(db, seasonRow.id, { slug: 'hookline-sprint', registryId: 1, maxRunTicks: 5400 }, now);
+    await seedGame(db, seasonRow.id, { slug: 'pickaxe-ascent', registryId: 2, maxRunTicks: 7200 }, now);
 
     const dailies = await db.select().from(seasonGames).where(eq(seasonGames.seedPolicy, 'daily-seed'));
     if (dailies.length === 0) throw new Error('failed to seed daily season_games');

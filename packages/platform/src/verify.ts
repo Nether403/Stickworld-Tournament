@@ -12,6 +12,7 @@ import {
 } from '@stickworld/db';
 import { testChamberGame } from '@stickworld/game-test-chamber';
 import { hooklineSprintGame } from '@stickworld/game-hookline-sprint';
+import { pickaxeAscentGame } from '@stickworld/game-pickaxe-ascent';
 import { decodeReplay, packGameVersion, type ReplayHeader } from '@stickworld/replay';
 import {
   BudgetExceededError,
@@ -32,6 +33,7 @@ import { unpackSeed, uuidToBytes } from './seed128.js';
 const GAMES = new Map<number, StickworldGame>([
   [0, testChamberGame],
   [1, hooklineSprintGame],
+  [2, pickaxeAscentGame],
 ]);
 
 function hexPrefix(hex: string): Buffer {

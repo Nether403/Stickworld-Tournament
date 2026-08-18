@@ -28,6 +28,15 @@ async function loadGame(registryId: number): Promise<StickworldGame | undefined>
       return undefined;
     }
   }
+  if (registryId === 2) {
+    const url = new URL('../../../../games/pickaxe-ascent/dist/index.js', import.meta.url);
+    try {
+      const mod = (await import(url.href)) as { pickaxeAscentGame: StickworldGame };
+      return mod.pickaxeAscentGame;
+    } catch {
+      return undefined;
+    }
+  }
   return undefined;
 }
 
