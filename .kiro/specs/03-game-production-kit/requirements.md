@@ -1,6 +1,6 @@
 # Spec 3 — Game Production Kit and Reference Game
 
-**Status:** approved 2026-08-18; **executing**
+**Status:** approved 2026-08-18; **executed** on `cursor/spec-3-full-depth-bda1`
 **Depth:** complete (design.md + tasks.md match Spec 1/2 style)
 **Covers:** Plan tasks 10, 12, 14
 **Depends on:** Spec 1 merged (PR #1, Branch A); Spec 2 merged (PR #2)
@@ -167,15 +167,15 @@ Approved. Execute `tasks.md` in order.
 
 ## Definition of done
 
-- [ ] Hookline Sprint playable end to end on desktop (Playwright + manual) and phone
+- [x] Hookline Sprint playable end to end on desktop (Playwright + manual) and phone
       viewports; ranked path uses `/v1` with no manual SQL
-- [ ] Google and email sign-in reach handle claim; GitHub is not shown
-- [ ] Shared packages extracted; Hookline hash series and fixture score byte-identical
-- [ ] Bundle baseline recorded; lazy-load test green (Hookline does not fetch Pickaxe)
-- [ ] Integration checklist is a CI merge gate
-- [ ] Pickaxe Ascent registered via the seam only, passing the identical suite
-- [ ] Inspiration ledgers present for both games
-- [ ] No new cloud vendor; Phaser and kit pins are exact
+- [x] Google and email sign-in reach handle claim; GitHub is not shown
+- [x] Shared packages extracted; Hookline hash series and fixture score byte-identical
+- [x] Bundle baseline recorded; lazy-load test green (Hookline does not fetch Pickaxe)
+- [x] Integration checklist is a CI merge gate
+- [x] Pickaxe Ascent registered via the seam only, passing the identical suite
+- [x] Inspiration ledgers present for both games
+- [x] No new cloud vendor; Phaser and kit pins are exact
 
 ---
 

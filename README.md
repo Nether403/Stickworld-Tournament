@@ -12,12 +12,13 @@ recorded inputs.
 - [`docs/adr/0001-determinism-fork.md`](docs/adr/0001-determinism-fork.md) — Branch A
 - [`docs/adr/0004-spec2-platform-stack.md`](docs/adr/0004-spec2-platform-stack.md) — Neon + Next + Drizzle
 
-## Spec 3 (in progress)
+## Spec 3 (this branch)
 
 Game production kit, Hookline Sprint, Pickaxe Ascent. Full-depth design at
 [`.kiro/specs/03-game-production-kit/`](.kiro/specs/03-game-production-kit/).
-Approved 2026-08-18. Presentation decisions:
+Approved and executed 2026-08-18. Presentation decisions:
 [`docs/adr/0005-spec3-game-host-and-auth.md`](docs/adr/0005-spec3-game-host-and-auth.md).
+Ragdoll is not in this spec — see ADR-0005.
 
 Frozen v1 game contracts: [`docs/games/hookline-sprint.md`](docs/games/hookline-sprint.md),
 [`docs/games/pickaxe-ascent.md`](docs/games/pickaxe-ascent.md).
