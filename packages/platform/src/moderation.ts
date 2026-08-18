@@ -149,16 +149,18 @@ export async function moderateReport(
 ): Promise<{ id: string; status: 'dismissed' | 'actioned' }> {
   await requireModerator(db, input.actorUserId);
   if (!input.reasonCode.trim() || !input.reasonText.trim()) throw new ApiError('HANDLE_INVALID');
-  const report = await db
-    .select()
-    .from(ugcReports)
-    .where(and(eq(ugcReports.id, input.reportId), eq(ugcReports.status, 'open')))
-    .then((rows) => rows[0]);
-  if (!report) throw new ApiError('ATTEMPT_NOT_FOUND');
   const now = clock.now();
   const status = input.action === 'dismiss' ? 'dismissed' : 'actioned';
 
   const actionRow = await db.transaction(async (tx) => {
+    const report = await tx
+      .update(ugcReports)
+      .set({ status })
+      .where(and(eq(ugcReports.id, input.reportId), eq(ugcReports.status, 'open')))
+      .returning({ id: ugcReports.id, targetUserId: ugcReports.targetUserId })
+      .then((rows) => rows[0]);
+    if (!report) throw new ApiError('ATTEMPT_NOT_FOUND');
+
     if (input.action === 'force_release_handle') {
       await tx
         .update(profiles)
@@ -175,7 +177,6 @@ export async function moderateReport(
         .set({ status: 'active' })
         .where(and(eq(profiles.userId, report.targetUserId), eq(profiles.status, 'suspended')));
     }
-    await tx.update(ugcReports).set({ status }).where(eq(ugcReports.id, report.id));
     const inserted = await tx
       .insert(moderationActions)
       .values({

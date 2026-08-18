@@ -10,9 +10,8 @@ import {
   verifiedResults,
   type Database,
 } from '@stickworld/db';
-import { eq } from 'drizzle-orm';
+import { and, eq, ne } from 'drizzle-orm';
 import { createHash } from 'node:crypto';
-import { audit } from './audit.js';
 import type { Clock } from './context.js';
 import { ApiError } from './errors.js';
 
@@ -83,46 +82,49 @@ export async function anonymiseProfile(
     const suffix = attempt === 0 ? '' : (attempt - 1).toString(16);
     const candidate = `d-${prefix}${suffix}`;
     try {
-      const updated = await db
-        .update(profiles)
-        .set({
-          status: 'anonymised',
-          handle: candidate,
-          handleClaimedAt: null,
-          handleChangedAt: now,
-          email: null,
-          authUserId: `deleted:${userId}`,
-        })
-        .where(eq(profiles.userId, userId))
-        .returning({ handle: profiles.handle })
-        .then((rows) => rows[0]);
-      if (!updated?.handle) throw new ApiError('INTERNAL');
-      anonymisedHandle = updated.handle;
+      anonymisedHandle = await db.transaction(async (tx) => {
+        const updated = await tx
+          .update(profiles)
+          .set({
+            status: 'anonymised',
+            handle: candidate,
+            handleClaimedAt: null,
+            handleChangedAt: now,
+            email: null,
+            authUserId: `deleted:${userId}`,
+          })
+          .where(and(eq(profiles.userId, userId), ne(profiles.status, 'anonymised')))
+          .returning({ handle: profiles.handle })
+          .then((rows) => rows[0]);
+        if (!updated?.handle) throw new ApiError('ALREADY_ANONYMISED');
+
+        const affectedSeasons = await tx
+          .select({ seasonId: seasonGames.seasonId })
+          .from(gameBests)
+          .innerJoin(seasonGames, eq(seasonGames.id, gameBests.seasonGameId))
+          .where(eq(gameBests.userId, userId));
+        for (const seasonId of new Set(affectedSeasons.map((row) => row.seasonId))) {
+          await tx
+            .insert(rankingDirty)
+            .values({ seasonId, dirtyAt: now })
+            .onConflictDoUpdate({
+              target: rankingDirty.seasonId,
+              set: { dirtyAt: now },
+            });
+        }
+        await tx.insert(auditEvents).values({
+          actor: userId,
+          action: 'profile.anonymise',
+          target: userId,
+          requestMeta: { reason: null },
+        });
+        return updated.handle;
+      });
       break;
     } catch (error) {
       if (!isUniqueViolation(error)) throw error;
     }
   }
   if (!anonymisedHandle) throw new ApiError('INTERNAL');
-
-  const affectedSeasons = await db
-    .select({ seasonId: seasonGames.seasonId })
-    .from(gameBests)
-    .innerJoin(seasonGames, eq(seasonGames.id, gameBests.seasonGameId))
-    .where(eq(gameBests.userId, userId));
-  for (const seasonId of new Set(affectedSeasons.map((row) => row.seasonId))) {
-    await db
-      .insert(rankingDirty)
-      .values({ seasonId, dirtyAt: now })
-      .onConflictDoUpdate({
-        target: rankingDirty.seasonId,
-        set: { dirtyAt: now },
-      });
-  }
-  await audit(db, {
-    actor: userId,
-    action: 'profile.anonymise',
-    target: userId,
-  });
   return { userId, handle: anonymisedHandle, status: 'anonymised' };
 }
