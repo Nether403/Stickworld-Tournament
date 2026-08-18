@@ -1,6 +1,6 @@
 # Spec 3 — Game Production Kit and Reference Game
 
-**Status:** full-depth design written; **awaiting human approval before execution**
+**Status:** approved 2026-08-18; **executing**
 **Depth:** complete (design.md + tasks.md match Spec 1/2 style)
 **Covers:** Plan tasks 10, 12, 14
 **Depends on:** Spec 1 merged (PR #1, Branch A); Spec 2 merged (PR #2)
@@ -17,7 +17,7 @@ scope draft named Hookline, a kit, and Pickaxe, but omitted Phaser ownership, mo
 switching, course geometry, score event types, action tables, package layout, and
 which kit pieces are actually proved by game one. This revision supplies that.
 
-Do not write Phaser scenes, `games/*`, or kit packages until this spec is approved.
+Approved. Execute `tasks.md` in order.
 
 ---
 

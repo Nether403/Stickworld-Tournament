@@ -39,6 +39,8 @@ Post-merge product facts (2026-08-18), given by the project owner:
 
    This is a recorded bend of the Spec 3 scope draft's package list, which named `ragdoll` up front. The sequencing rule in that same draft wins: do not extract speculation.
 
+   **Owner confirmation (2026-08-18):** deferral is accepted. Neither Spec 3 game simulates a ten-body stickman, so there is nothing to extract. The ten-body assembly arrives with the first game that needs it (Spec 4).
+
 6. **Spec 3 auth surface:** Google + email signup/sign-in via Neon Auth. Remove or hide the GitHub button until a later spec. Email does not add a vendor. Discord remains out.
 
 7. **Pickaxe Ascent v1 uses static ledges only.** Spec 4's kinematic moving platforms are Wave B. Putting them in Spec 3 would smuggle a second new primitive into the kit-proving game.

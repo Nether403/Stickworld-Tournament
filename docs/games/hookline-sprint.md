@@ -22,18 +22,23 @@ puzzle sequence memorised from another product.
 
 ## Actions
 
-| id | name | kind | notes |
-|---|---|---|---|
-| 1 | `hook` | `bool` | `1` held = try-attach / stay attached; `0` = release |
+Pointer aim is a simulation input (it changes which anchor attaches). A bool-only
+replay cannot reproduce it, so v1 records integer degrees. Keyboard still feels
+like one button: the host writes `aim` from auto-aim, then `hook`.
 
-Hold-to-attach, release-to-let-go. One button. No analog actions.
+| id | name | kind | min | max | notes |
+|---|---|---|---|---|---|
+| 1 | `aim` | `int` | 0 | 359 | degrees, 0 = +x, counter-clockwise, Y-up. Record on change. |
+| 2 | `hook` | `bool` |  |  | `1` held = try-attach / stay attached; `0` = release |
 
-- **Pointer/touch:** ray origin = player centre; ray direction = pointer world
-  position minus player centre. Max length `ATTACH_RANGE = 8` m.
-- **Keyboard (Space):** ray direction = unit vector toward the nearest anchor
-  whose position is inside a forward cone: `dot(toAnchor, facing) >= 0.25`
-  and distance ≤ 8 m. `facing` is `(sign(linvel.x) or +1, 0.15)` normalised
-  with `detmath.hypot` — slight upward bias so keyboard is playable.
+Hold-to-attach, release-to-let-go.
+
+- **Pointer/touch:** host sets `aim` from pointer world position minus player
+  centre. Ray origin = player centre. Max length `ATTACH_RANGE = 8` m.
+- **Keyboard (Space):** host sets `aim` toward the nearest anchor inside a
+  forward cone (`dot(toAnchor, facing) >= 0.25`, distance ≤ 8 m), then `hook`.
+  `facing` is `(sign(linvel.x) or +1, 0.15)` normalised with `detmath.hypot`.
+- Apply order is ascending action id: `aim` (1) then `hook` (2) on the same tick.
 - Attach on `0 → 1` only if the ray hits an **anchor** collider. Miss = no joint.
 - While `hook = 1` and attached, the rope stays. `1 → 0` removes the joint
   (release). Re-attach requires a new edge.

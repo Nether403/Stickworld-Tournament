@@ -7,7 +7,7 @@ design is **approved** and every earlier spec's definition of done is green.
 |---|---|---|---|---|
 | [01](./01-simulation-replay-core/) | Deterministic Simulation and Replay Core | **full** | 1–4 | **done, merged** ([PR #1](https://github.com/Nether403/Stickworld-Tournament/pull/1)) |
 | [02](./02-tournament-platform-ranking/) | Tournament Platform and Ranking | **full** | 5–9, 11, 13 | **done, merged** ([PR #2](https://github.com/Nether403/Stickworld-Tournament/pull/2)) |
-| [03](./03-game-production-kit/) | Game Production Kit and Reference Game | **full** | 10, 12, 14 | design written; **awaiting approval** before execution |
+| [03](./03-game-production-kit/) | Game Production Kit and Reference Game | **full** | 10, 12, 14 | **approved 2026-08-18**; executing |
 | [04](./04-roster-production/) | Roster Production (games 3–10) | scope | 15–18 | blocked on Spec 3 |
 | [05](./05-assets-integrity-operations-launch/) | Assets, Integrity, Operations, Launch | scope | 19–24 | blocked on Specs 1–4 |
 

@@ -3,7 +3,7 @@
 **Depth:** full. This document is detailed enough to implement from directly.
 **Fork:** Branch A (ADR-0001). Worker stays Node.
 **Host / kit / auth decisions:** ADR-0005.
-**Do not execute until approved.**
+**Do not execute until approved.** Spec 3 was approved 2026-08-18. Execution follows `tasks.md`.
 
 The previous scope draft was not enough to build from: it named two games and a
 kit but omitted who steps the sim, where practice lives, Phaser pin, course
@@ -191,7 +191,10 @@ export const hooklineSprintManifest: GameManifest = {
   attemptShape: { kind: 'single' },
   maxRunTicks: 5400,
   tickRate: 60,
-  actions: [{ id: 1, name: 'hook', kind: 'bool' }],
+  actions: [
+    { id: 1, name: 'aim', kind: 'int', min: 0, max: 359 },
+    { id: 2, name: 'hook', kind: 'bool' },
+  ],
   budget: {
     maxRigidBodies: 16,
     maxColliders: 32,
