@@ -16,6 +16,12 @@ Task 2 must not regenerate those files.
 - Rope / distance impulse joint
 - Kinematic cuboid + `setKinematicAngle` (added for Pickaxe Ascent; not used by Hookline)
 
+## Spec 4 Wave A
+
+- `launchImpulse(body, dir, speed)` — set linvel to unit direction × speed (impulse-from-rest)
+- `resetDynamicPose` — best-of pose reset without new bodies
+- Planted / dynamic capsules, dynamic cuboid, revolute + fixed joints
+
 ## Not in Spec 3
 
 **Ragdoll is not implemented.** Hookline Sprint and Pickaxe Ascent v1 use a locked-rotation

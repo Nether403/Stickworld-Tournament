@@ -1,6 +1,6 @@
 # Spec 4 — Roster Production (games 3–10)
 
-**Status:** full-depth draft 2026-08-18; **not approved — do not execute**
+**Status:** approved 2026-08-18; executing. Do not start Spec 5 until exit criteria have executed-command evidence.
 **Depth:** complete (design.md + tasks.md match Spec 1/2/3 style)
 **Covers:** Plan tasks 15–18
 **Depends on:** Spec 3 merged (PR #3); Branch A (ADR-0001)
@@ -17,7 +17,7 @@ action tables, course numbers, score events, how best-of-3 fits in one replay,
 where ragdoll is proved, and which `/v1` fields Wave B is allowed to extend.
 This revision supplies that.
 
-**Do not implement `games/<slug>` for titles 3–10 until this spec is approved.**
+Owner approved execution 2026-08-18. ADR-0006 decisions are locked.
 
 ---
 

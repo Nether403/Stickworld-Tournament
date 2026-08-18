@@ -6,8 +6,15 @@ import {
   createFixedBall,
   createFixedCuboid,
   createKinematicCuboid,
+  createDynamicCapsule,
+  createDynamicCuboid,
+  createFixedJoint,
   createLockedCapsule,
+  createPlantedCapsule,
+  createRevoluteJoint,
   createRopeJoint,
+  launchImpulse,
+  resetDynamicPose,
   createVerticalGateSensor,
   destroyImpulseJoint,
   setKinematicAngle,
@@ -48,6 +55,26 @@ describe('physics-kit factories', () => {
     setKinematicTranslation(kin.body, 1.1, 2.2);
     setKinematicAngle(kin.body, 45);
     expect(kin.collider.isSensor()).toBe(true);
+    const planted = createPlantedCapsule(sim, rapier, 2, 2, 0.28, 0.16, 22, 0, tags, 'torso');
+    expect(planted.body.isFixed()).toBe(false);
+    const arrow = createDynamicCapsule(sim, rapier, 2.4, 2, 0.35, 0.03, 0.04, 0, tags, 'arrow');
+    launchImpulse(arrow.body, { x: 1, y: 0 }, 10);
+    expect(arrow.body.linvel().x).toBe(10);
+    resetDynamicPose(arrow.body, 2.4, 2);
+    expect(arrow.body.linvel().x).toBe(0);
+    const hammer = createDynamicCuboid(sim, rapier, 3.6, 1.6, 0.45, 0.08, 8, tags, 'hammer');
+    const weld = createFixedJoint(sim.world, rapier, planted.body, arrow.body);
+    destroyImpulseJoint(sim.world, weld);
+    const hinge = createRevoluteJoint(
+      sim.world,
+      rapier,
+      planted.body,
+      hammer.body,
+      { x: 0.4, y: 0 },
+      { x: 0, y: 0 },
+      { min: -1, max: 1 },
+    );
+    destroyImpulseJoint(sim.world, hinge);
     sim.free();
   });
 });

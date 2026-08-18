@@ -7,6 +7,7 @@ import {
   notePerfect,
   progressDelta,
   resetCombo,
+  sumSubAttempts,
   streakHundredths,
 } from '../src/index.ts';
 
@@ -38,6 +39,14 @@ describe('firstPlaneCrossed', () => {
     expect(firstPlaneCrossed(11, 25, [12, 24, 36, 52], [true, false, false, false])).toBe(1);
     expect(firstPlaneCrossed(51, 52, [12, 24, 36, 52], [true, true, true, false])).toBe(3);
     expect(firstPlaneCrossed(52, 60, [12, 24, 36, 52], [true, true, true, true])).toBeUndefined();
+  });
+});
+
+describe('sumSubAttempts', () => {
+  it('sums integers and treats a missed slot as 0', () => {
+    expect(sumSubAttempts([120, 0, 80])).toBe(200);
+    expect(sumSubAttempts([])).toBe(0);
+    expect(sumSubAttempts([1, 2, 3])).toBe(6);
   });
 });
 

@@ -16,6 +16,34 @@ export function tagCollider(
   tags.set(collider.handle, name);
 }
 
+export type LinvelBody = {
+  setLinvel: (v: { x: number; y: number }, wake: boolean) => void;
+};
+
+export type PoseBody = LinvelBody & {
+  setTranslation: (t: { x: number; y: number }, wake: boolean) => void;
+  setAngvel: (w: number, wake: boolean) => void;
+  setRotation: (angle: number, wake: boolean) => void;
+};
+
+/** Impulse-from-rest: set linear velocity to unit(dir) × speed. Spec 4 Wave A. */
+export function launchImpulse(body: LinvelBody, dir: { x: number; y: number }, speed: number): void {
+  const len = hypot(dir.x, dir.y);
+  if (len === 0) {
+    body.setLinvel({ x: 0, y: 0 }, true);
+    return;
+  }
+  body.setLinvel({ x: (dir.x / len) * speed, y: (dir.y / len) * speed }, true);
+}
+
+/** Best-of pose reset: translation + zero velocities. Does not create bodies. */
+export function resetDynamicPose(body: PoseBody, x: number, y: number, angle = 0): void {
+  body.setTranslation({ x, y }, true);
+  body.setLinvel({ x: 0, y: 0 }, true);
+  body.setAngvel(0, true);
+  body.setRotation(angle, true);
+}
+
 export function createLockedCapsule(
   sim: SimWorld,
   rapier: RapierModule,
@@ -35,6 +63,75 @@ export function createLockedCapsule(
     rapier.ColliderDesc.capsule(halfHeight, radius).setMass(mass),
     body,
   );
+  tagCollider(tags, collider, name);
+  return { body, collider };
+}
+
+/** Locked rotation and translation (Archery plant, Hammer thrower). */
+export function createPlantedCapsule(
+  sim: SimWorld,
+  rapier: RapierModule,
+  x: number,
+  y: number,
+  halfHeight: number,
+  radius: number,
+  mass: number,
+  damping: number,
+  tags: ColliderTags,
+  name: string,
+) {
+  const body = sim.createRigidBody(
+    rapier.RigidBodyDesc.dynamic()
+      .setTranslation(x, y)
+      .setLinearDamping(damping)
+      .lockRotations()
+      .lockTranslations(),
+  );
+  const collider = sim.world.createCollider(
+    rapier.ColliderDesc.capsule(halfHeight, radius).setMass(mass),
+    body,
+  );
+  tagCollider(tags, collider, name);
+  return { body, collider };
+}
+
+/** Unlocked-rotation capsule (Archery arrow). */
+export function createDynamicCapsule(
+  sim: SimWorld,
+  rapier: RapierModule,
+  x: number,
+  y: number,
+  halfHeight: number,
+  radius: number,
+  mass: number,
+  damping: number,
+  tags: ColliderTags,
+  name: string,
+) {
+  const body = sim.createRigidBody(
+    rapier.RigidBodyDesc.dynamic().setTranslation(x, y).setLinearDamping(damping),
+  );
+  const collider = sim.world.createCollider(
+    rapier.ColliderDesc.capsule(halfHeight, radius).setMass(mass),
+    body,
+  );
+  tagCollider(tags, collider, name);
+  return { body, collider };
+}
+
+export function createDynamicCuboid(
+  sim: SimWorld,
+  rapier: RapierModule,
+  x: number,
+  y: number,
+  hx: number,
+  hy: number,
+  mass: number,
+  tags: ColliderTags,
+  name: string,
+) {
+  const body = sim.createRigidBody(rapier.RigidBodyDesc.dynamic().setTranslation(x, y));
+  const collider = sim.world.createCollider(rapier.ColliderDesc.cuboid(hx, hy).setMass(mass), body);
   tagCollider(tags, collider, name);
   return { body, collider };
 }
@@ -190,4 +287,42 @@ export function destroyImpulseJoint(
   joint: ReturnType<SimWorld['world']['createImpulseJoint']>,
 ): void {
   world.removeImpulseJoint(joint, true);
+}
+
+export function createRevoluteJoint(
+  world: SimWorld['world'],
+  rapier: RapierModule,
+  bodyA: ReturnType<SimWorld['createRigidBody']>,
+  bodyB: ReturnType<SimWorld['createRigidBody']>,
+  localA: { x: number; y: number },
+  localB: { x: number; y: number },
+  limits?: { min: number; max: number },
+): ReturnType<SimWorld['world']['createImpulseJoint']> {
+  const joint = world.createImpulseJoint(
+    rapier.JointData.revolute(localA, localB),
+    bodyA,
+    bodyB,
+    true,
+  );
+  if (limits) {
+    const typed = joint as { setLimits?: (min: number, max: number) => void };
+    typed.setLimits?.(limits.min, limits.max);
+  }
+  return joint;
+}
+
+export function createFixedJoint(
+  world: SimWorld['world'],
+  rapier: RapierModule,
+  bodyA: ReturnType<SimWorld['createRigidBody']>,
+  bodyB: ReturnType<SimWorld['createRigidBody']>,
+  localA: { x: number; y: number } = { x: 0, y: 0 },
+  localB: { x: number; y: number } = { x: 0, y: 0 },
+): ReturnType<SimWorld['world']['createImpulseJoint']> {
+  return world.createImpulseJoint(
+    rapier.JointData.fixed(localA, 0, localB, 0),
+    bodyA,
+    bodyB,
+    true,
+  );
 }

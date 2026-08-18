@@ -8,7 +8,7 @@ design is **approved** and every earlier spec's definition of done is green.
 | [01](./01-simulation-replay-core/) | Deterministic Simulation and Replay Core | **full** | 1–4 | **done, merged** ([PR #1](https://github.com/Nether403/Stickworld-Tournament/pull/1)) |
 | [02](./02-tournament-platform-ranking/) | Tournament Platform and Ranking | **full** | 5–9, 11, 13 | **done, merged** ([PR #2](https://github.com/Nether403/Stickworld-Tournament/pull/2)) |
 | [03](./03-game-production-kit/) | Game Production Kit and Reference Game | **full** | 10, 12, 14 | **done, merged** ([PR #3](https://github.com/Nether403/Stickworld-Tournament/pull/3)) |
-| [04](./04-roster-production/) | Roster Production (games 3–10) | **full** | 15–18 | **draft 2026-08-18 — not approved, do not execute** |
+| [04](./04-roster-production/) | Roster Production (games 3–10) | **full** | 15–18 | **approved 2026-08-18; executing** |
 | [05](./05-assets-integrity-operations-launch/) | Assets, Integrity, Operations, Launch | scope | 19–24 | blocked on Spec 4 |
 
 Plus a non-spec parallel track: [`docs/legal/brand-and-ip-clearance.md`](../../docs/legal/brand-and-ip-clearance.md) — started, long lead times, gates naming.
@@ -42,7 +42,7 @@ Spec 2  merged to main (PR #2)
    ▼
 Spec 3  merged to main (PR #3)
    ▼
-Spec 4  full-depth design ──► REPORT TO USER, STOP until approved ──► execute
+Spec 4  approved 2026-08-18 ──► executing ──► STOP after exit evidence; Spec 5 waits
    ▼
 Spec 5  revise → approve → execute → launch
 ```

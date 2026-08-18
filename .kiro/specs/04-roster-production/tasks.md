@@ -1,6 +1,6 @@
 # Spec 4 — Tasks
 
-**Do not execute until this spec is approved.** Spec 3 is merged (PR #3).
+**Status:** approved 2026-08-18; executing. Spec 3 is merged (PR #3).
 Do not start Spec 5 until Spec 4's exit criteria have executed-command evidence.
 
 Legend: `[ ]` not started · `[~]` in progress · `[x]` done
