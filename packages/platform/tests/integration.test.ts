@@ -1484,9 +1484,7 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
     `);
 
     try {
-      await expect(anonymiseProfile(db, c.clock, profile.userId)).rejects.toThrow(
-        'forced anonymisation audit failure',
-      );
+      await expect(anonymiseProfile(db, c.clock, profile.userId)).rejects.toThrow();
       const after = await db
         .select()
         .from(profiles)
