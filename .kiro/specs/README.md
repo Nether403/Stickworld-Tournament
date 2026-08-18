@@ -1,33 +1,33 @@
-# Specs
+# Stickworld Tournament — Spec Index
 
-Specs execute in order. Do not start a spec's implementation until its design is
-**approved** and every earlier spec's definition of done is green.
+Five specs, executed in order. Do not start a spec's implementation until its
+design is **approved** and every earlier spec's definition of done is green.
 
 | Spec | Title | Depth | Plan tasks | Status |
 |---|---|---|---|---|
-| [01](./01-simulation-replay-core/) | Deterministic Simulation and Replay Core | **full** | 1–4 | **done, merged to `main`** ([PR #1](https://github.com/Nether403/Stickworld-Tournament/pull/1)) |
-| [02](./02-tournament-platform-ranking/) | Tournament Platform and Ranking | **full** | 5–9, 11, 13 | design written; **awaiting approval** before execution |
-| [03](./03-game-production-kit/) | Game Production Kit and Reference Game | scope | 10, 12, 14 | blocked on Spec 2 |
-| [04](./04-roster-production/) | Roster Production (games 3–10) | scope | 15–18 | blocked on Specs 1–3 |
+| [01](./01-simulation-replay-core/) | Deterministic Simulation and Replay Core | **full** | 1–4 | **done, merged** ([PR #1](https://github.com/Nether403/Stickworld-Tournament/pull/1)) |
+| [02](./02-tournament-platform-ranking/) | Tournament Platform and Ranking | **full** | 5–9, 11, 13 | **done, merged** ([PR #2](https://github.com/Nether403/Stickworld-Tournament/pull/2)) |
+| [03](./03-game-production-kit/) | Game Production Kit and Reference Game | **full** | 10, 12, 14 | design written; **awaiting approval** before execution |
+| [04](./04-roster-production/) | Roster Production (games 3–10) | scope | 15–18 | blocked on Spec 3 |
 | [05](./05-assets-integrity-operations-launch/) | Assets, Integrity, Operations, Launch | scope | 19–24 | blocked on Specs 1–4 |
 
 Plus a non-spec parallel track: [`docs/legal/brand-and-ip-clearance.md`](../../docs/legal/brand-and-ip-clearance.md) — started, long lead times, gates naming.
 
 **Vendors (locked):** Neon (Postgres + Auth + Branches) + Railway (web, worker, cron). No other cloud.
 
-**Auth (Spec 2):** Google + GitHub via Neon Managed Better Auth. Discord login is **not** in Spec 2 (Neon CLI first-party providers are `google`, `github`, `vercel`). See `docs/adr/0004-spec2-platform-stack.md`.
-
-Spec 2's worker calls `@stickworld/replay` (`decodeReplay` + `playReplay`) and registers Test Chamber at `registry_id = 0`. Spec 1 delivered both. Execution of Spec 2 still waits on human approval of the design.
+**Auth (current):** Google OAuth + email signup via Neon Managed Better Auth. GitHub is deferred. Discord is not a Neon first-party provider. See `docs/adr/0004-spec2-platform-stack.md` and `docs/adr/0005-spec3-game-host-and-auth.md`.
 
 ---
 
-## Why Spec 1 was full depth and 3–5 are still scope
+## Why Spec 1 was full depth first, and 4–5 stay scope
 
 Spec 1 contained a determinism fork. That fork is **resolved: Branch A**. Specs 2–5 do not need a determinism-axis rewrite.
 
-Spec 2 is now full depth because the worker runtime, schema, and verification pipeline are no longer hypothetical.
+Spec 2 is full depth and executed: worker runtime, schema, and `/v1` are real.
 
-Specs 3–5 stay at scope-and-contract depth until Spec 2 lands: they depend on the `/v1` attempt lifecycle, auth, and ranking snapshots, not on physics. Writing Phaser kit and roster implementation detail before the platform exists still risks writing it twice. Same land-then-revise cycle as before, just starting from a known Branch A.
+Spec 3 is now full depth because the platform contracts exist: Phaser ownership, practice vs ranked, course geometry, score events, and extraction scope can be named without writing them twice.
+
+Specs 4–5 stay at scope-and-contract depth until Spec 3 lands: they depend on the kit, the checklist merge gate, and the registration seam.
 
 ---
 
@@ -36,9 +36,9 @@ Specs 3–5 stay at scope-and-contract depth until Spec 2 lands: they depend on 
 ```
 Spec 1  ──► Branch A, merged to main
    ▼
-Spec 2  full-depth design ──► REPORT TO USER, STOP until approved ──► execute
+Spec 2  merged to main (PR #2)
    ▼
-Spec 3  revise → approve → execute
+Spec 3  full-depth design ──► REPORT TO USER, STOP until approved ──► execute
    ▼
 Spec 4  revise → approve → execute
    ▼
@@ -49,12 +49,14 @@ Spec 5  revise → approve → execute → launch
 
 ## The project in one paragraph
 
-A browser-based competitive platform hosting ten original single-player stickman physics games.
-Each game has a verified leaderboard; one championship ranking spans all ten. The hard problem is
-not the games — it is score trust. The browser belongs to the player, so a client-reported score
-is worthless. Every trust claim depends on the server independently recomputing each score from
-recorded inputs, which requires bit-identical physics in browser and server. Spec 1 proved that
-for one pinned Rapier `-compat` 0.20.0 build.
+A browser-based competitive platform hosting ten original single-player stickman
+physics games. Each game has a verified leaderboard; one championship ranking
+spans all ten. The hard problem is not the games — it is score trust. The
+browser belongs to the player, so a client-reported score is worthless. Every
+trust claim depends on the server independently recomputing each score from
+recorded inputs, which requires bit-identical physics in browser and server.
+Spec 1 proved that for one pinned Rapier `-compat` 0.20.0 build. Spec 2 made
+the server the issuer of every ranked run.
 
 ---
 
@@ -68,12 +70,11 @@ for one pinned Rapier `-compat` 0.20.0 build.
 | Ranked format | Both — fixed courses for the championship, plus a daily-seeded ladder |
 | Stakes | Bragging rights only. No prizes, no KYC |
 | Live PvP | Out of scope, but must stay architecturally possible without a rewrite |
-| Launch OAuth | Google + GitHub (not Discord) |
+| Spec 3 login | Google + email. GitHub later. No Discord |
 
-Consequences: replays are Postgres `bytea` (Neon Object Storage is Beta — keep it off the
-integrity path); the job queue is a Postgres table consumed with `FOR UPDATE SKIP LOCKED`; auth is
-OAuth-only because magic links need an email-dependent flow we are not designing; and there is
-**no CDN at launch** — an accepted, recorded gap.
+Consequences: replays are Postgres `bytea`; the job queue is a Postgres table
+consumed with `FOR UPDATE SKIP LOCKED`; email uses Neon's bundled sender (not a
+third vendor); there is **no CDN at launch** — an accepted, recorded gap.
 
 ---
 
@@ -85,7 +86,7 @@ OAuth-only because magic links need an email-dependent flow we are not designing
 - **The Rapier version and build variant are pinned and must not be bumped casually.** A version
   bump invalidates historical replays and is a competition-affecting change.
 - No `Math` transcendentals, `**`, `Math.random`, or wall-clock reads anywhere inside `sim-core`
-  or any game's `simulation/` directory. Lint-enforced.
+  or any game's `simulation/` directory. Lint-enforced. Same ban on `physics-kit` and `scoring`.
 - No runtime calls to Gemini, Deepgram, or OpenRouter in shipped gameplay paths.
 - Golden determinism hashes require an ADR to change. They are the contract, not a build artefact.
 
