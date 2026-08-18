@@ -9,7 +9,7 @@ import {
   verifiedResults,
   type Database,
 } from '@stickworld/db';
-import { and, eq, gt, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, sql } from 'drizzle-orm';
 import type { Clock } from './context.js';
 import {
   ATTEMPT_TTL_SECONDS,
@@ -58,7 +58,9 @@ export interface ChampionshipPayload {
   rows: ChampionshipRow[];
 }
 
-async function markDirty(db: Database, seasonId: string, at: Date): Promise<void> {
+type RankingDatabase = Pick<Database, 'select' | 'insert' | 'update'>;
+
+async function markDirty(db: RankingDatabase, seasonId: string, at: Date): Promise<void> {
   await db
     .insert(rankingDirty)
     .values({ seasonId, dirtyAt: at })
@@ -72,7 +74,10 @@ export async function markSeasonDirty(db: Database, seasonId: string, at: Date):
   await markDirty(db, seasonId, at);
 }
 
-async function loadOrderedBests(db: Database, seasonGameId: string): Promise<LeaderboardRow[]> {
+async function loadOrderedBests(
+  db: RankingDatabase,
+  seasonGameId: string,
+): Promise<LeaderboardRow[]> {
   const rows = await db
     .select({
       userId: gameBests.userId,
@@ -107,7 +112,7 @@ async function loadOrderedBests(db: Database, seasonGameId: string): Promise<Lea
 }
 
 async function writeLiveSnapshot(
-  db: Database,
+  db: RankingDatabase,
   seasonId: string,
   scope: 'game' | 'championship' | 'daily',
   subjectId: string,
@@ -165,7 +170,7 @@ function standingsFingerprint(payload: ChampionshipPayload): string {
 }
 
 export async function recomputeSeason(
-  db: Database,
+  db: RankingDatabase,
   clock: Clock,
   seasonId: string,
   options: { force?: boolean } = {},
@@ -300,34 +305,58 @@ export async function recomputeAllDirty(db: Database, clock: Clock): Promise<voi
 }
 
 export async function closeSeason(db: Database, clock: Clock, seasonId: string): Promise<void> {
-  const season = await db
-    .select()
-    .from(seasons)
-    .where(eq(seasons.id, seasonId))
-    .then((rows) => rows[0]);
-  if (!season || season.status === 'closed') return;
-  await db.update(seasons).set({ status: 'closing' }).where(eq(seasons.id, seasonId));
-  const now = clock.now();
-  const inFlight = await db
-    .select({ id: attempts.id })
-    .from(attempts)
-    .innerJoin(seasonGames, eq(seasonGames.id, attempts.seasonGameId))
-    .where(
-      and(
-        eq(seasonGames.seasonId, seasonId),
-        inArray(attempts.status, ['issued', 'active']),
-        gt(attempts.expiresAt, now),
-        sql`${attempts.issuedAt} + (${ATTEMPT_TTL_SECONDS} * interval '1 second') > ${now}`,
-      ),
-    )
-    .limit(1);
-  if (inFlight.length > 0) return;
-  await recomputeSeason(db, clock, seasonId, { force: true });
-  await db
-    .update(rankingSnapshots)
-    .set({ frozen: true })
-    .where(and(eq(rankingSnapshots.seasonId, seasonId), eq(rankingSnapshots.frozen, false)));
-  await db.update(seasons).set({ status: 'closed' }).where(eq(seasons.id, seasonId));
+  await db.transaction(async (tx) => {
+    const season = await tx
+      .select({ status: seasons.status })
+      .from(seasons)
+      .where(eq(seasons.id, seasonId))
+      .for('update')
+      .then((rows) => rows[0]);
+    if (!season || season.status === 'closed') return;
+
+    await tx.update(seasons).set({ status: 'closing' }).where(eq(seasons.id, seasonId));
+    const now = clock.now();
+    const inFlight = await tx
+      .select({ id: attempts.id })
+      .from(attempts)
+      .innerJoin(seasonGames, eq(seasonGames.id, attempts.seasonGameId))
+      .where(
+        and(
+          eq(seasonGames.seasonId, seasonId),
+          inArray(attempts.status, ['issued', 'active']),
+          gt(attempts.expiresAt, now),
+          sql`${attempts.issuedAt} + (${ATTEMPT_TTL_SECONDS} * interval '1 second') > ${now}`,
+        ),
+      )
+      .limit(1);
+    if (inFlight.length > 0) return;
+
+    await recomputeSeason(tx, clock, seasonId, { force: true });
+    await tx
+      .update(rankingSnapshots)
+      .set({ frozen: true })
+      .where(and(eq(rankingSnapshots.seasonId, seasonId), eq(rankingSnapshots.frozen, false)));
+    await tx.update(seasons).set({ status: 'closed' }).where(eq(seasons.id, seasonId));
+  });
+}
+
+async function overlayAnonymisedHandles<
+  T extends { rows: Array<{ userId: string; handle: string | null }> },
+>(db: Database, payload: T): Promise<T> {
+  const userIds = [...new Set(payload.rows.map((row) => row.userId))];
+  if (userIds.length === 0) return payload;
+  const anonymised = await db
+    .select({ userId: profiles.userId })
+    .from(profiles)
+    .where(and(inArray(profiles.userId, userIds), eq(profiles.status, 'anonymised')));
+  if (anonymised.length === 0) return payload;
+  const anonymisedIds = new Set(anonymised.map((profile) => profile.userId));
+  return {
+    ...payload,
+    rows: payload.rows.map((row) =>
+      anonymisedIds.has(row.userId) ? { ...row, handle: 'retired' } : row,
+    ),
+  } as T;
 }
 
 export async function readLeaderboard(
@@ -348,12 +377,14 @@ export async function readLeaderboard(
       and(
         eq(rankingSnapshots.seasonId, seasonId),
         eq(rankingSnapshots.subjectId, seasonGameId),
-        eq(rankingSnapshots.frozen, false),
+        inArray(rankingSnapshots.scope, ['game', 'daily']),
       ),
     )
+    .orderBy(asc(rankingSnapshots.frozen))
+    .limit(1)
     .then((r) => r[0]);
   if (!snap) return { asOf: new Date(0).toISOString(), rows: [], nextCursor: null, viewer: null };
-  const payload = snap.payload as GameSnapshotPayload;
+  const payload = await overlayAnonymisedHandles(db, snap.payload as GameSnapshotPayload);
   const limit = Math.min(
     Math.max(query.limit ?? LEADERBOARD_PAGE_DEFAULT, 1),
     LEADERBOARD_PAGE_MAX,
@@ -389,12 +420,13 @@ export async function readStandings(db: Database, seasonId: string): Promise<Cha
         eq(rankingSnapshots.seasonId, seasonId),
         eq(rankingSnapshots.scope, 'championship'),
         eq(rankingSnapshots.subjectId, seasonId),
-        eq(rankingSnapshots.frozen, false),
       ),
     )
+    .orderBy(asc(rankingSnapshots.frozen))
+    .limit(1)
     .then((r) => r[0]);
   if (!snap) {
     return { asOf: new Date(0).toISOString(), provisional: true, rows: [] };
   }
-  return snap.payload as ChampionshipPayload;
+  return overlayAnonymisedHandles(db, snap.payload as ChampionshipPayload);
 }

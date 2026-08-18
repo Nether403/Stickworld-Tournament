@@ -7,7 +7,6 @@ import {
 } from '@stickworld/db';
 import { and, desc, eq, ne } from 'drizzle-orm';
 import { createHash } from 'node:crypto';
-import { audit } from './audit.js';
 import type { PlatformContext, Clock } from './context.js';
 import { ApiError } from './errors.js';
 import { UGC_REPORT_RATE_PER_HOUR } from './limits.js';
@@ -67,24 +66,31 @@ export async function fileReport(
         .then((rows) => rows[0]);
   if (!target) throw new ApiError('ATTEMPT_NOT_FOUND');
 
-  const report = await db
-    .insert(ugcReports)
-    .values({
-      reporterUserId: input.reporterUserId,
-      reporterIpHash: ipHash,
-      targetUserId: target.userId,
-      reasonCode: input.reasonCode,
-      details: input.details ?? '',
-      status: 'open',
-    })
-    .returning({ id: ugcReports.id, status: ugcReports.status })
-    .then((rows) => rows[0]);
-  if (!report) throw new ApiError('INTERNAL');
-  await audit(db, {
-    actor: input.reporterUserId ?? null,
-    action: 'ugc.report',
-    target: report.id,
-    meta: { targetUserId: target.userId, reasonCode: input.reasonCode },
+  const report = await db.transaction(async (tx) => {
+    const inserted = await tx
+      .insert(ugcReports)
+      .values({
+        reporterUserId: input.reporterUserId,
+        reporterIpHash: ipHash,
+        targetUserId: target.userId,
+        reasonCode: input.reasonCode,
+        details: input.details ?? '',
+        status: 'open',
+      })
+      .returning({ id: ugcReports.id, status: ugcReports.status })
+      .then((rows) => rows[0]);
+    if (!inserted) throw new ApiError('INTERNAL');
+    await tx.insert(auditEvents).values({
+      actor: input.reporterUserId ?? null,
+      action: 'ugc.report',
+      target: inserted.id,
+      requestMeta: {
+        targetUserId: target.userId,
+        reasonCode: input.reasonCode,
+        reason: null,
+      },
+    });
+    return inserted;
   });
   return { id: report.id, status: 'open' };
 }

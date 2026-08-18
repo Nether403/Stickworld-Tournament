@@ -48,11 +48,16 @@ export async function applyMigrations(connectionString?: string): Promise<void> 
 export async function rollbackInitial(connectionString?: string): Promise<void> {
   loadWorkspaceEnv();
   const url = connectionString ?? requireEnv('DATABASE_URL_UNPOOLED');
-  const down = readFileSync(resolve(here, '../drizzle/0000_init.down.sql'), 'utf8');
+  const complianceDown = readFileSync(
+    resolve(here, '../drizzle/0002_spec5_compliance.down.sql'),
+    'utf8',
+  );
+  const initialDown = readFileSync(resolve(here, '../drizzle/0000_init.down.sql'), 'utf8');
   const client = new pg.Client({ connectionString: url });
   await client.connect();
   try {
-    await client.query(down);
+    await client.query(complianceDown);
+    await client.query(initialDown);
     await client.query('DROP SCHEMA IF EXISTS drizzle CASCADE');
   } finally {
     await client.end();

@@ -8,10 +8,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 
 it('declares the Spec 5 compliance migration', () => {
   const migration = readFileSync(resolve(here, '../drizzle/0002_spec5_compliance.sql'), 'utf8');
-  const rollback = readFileSync(
-    resolve(here, '../drizzle/0002_spec5_compliance.down.sql'),
-    'utf8',
-  );
+  const rollback = readFileSync(resolve(here, '../drizzle/0002_spec5_compliance.down.sql'), 'utf8');
   expect(migration).toContain('ALTER TYPE "profile_status" ADD VALUE IF NOT EXISTS \'anonymised\'');
   expect(migration).toContain('CREATE TABLE "ugc_reports"');
   expect(migration).toContain('CREATE TABLE "moderation_actions"');

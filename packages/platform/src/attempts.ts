@@ -173,6 +173,14 @@ export async function issueAttempt(
     const attemptId = randomUUID();
     const expiresAt = new Date(now.getTime() + ATTEMPT_TTL_SECONDS * 1000);
     await db.transaction(async (tx) => {
+      const lockedSeason = await tx
+        .select({ status: seasons.status })
+        .from(seasons)
+        .where(eq(seasons.id, sg.seasons.id))
+        .for('update')
+        .then((rows) => rows[0]);
+      if (lockedSeason?.status !== 'active') throw new ApiError('SEASON_INACTIVE');
+
       await tx.insert(attempts).values({
         id: attemptId,
         userId: input.userId,
