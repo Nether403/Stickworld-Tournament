@@ -30,7 +30,7 @@ export function createTestChamberSimulation(context: SimulationContext): Simulat
   const mass = sim.createRigidBody(R.RigidBodyDesc.dynamic().setTranslation(0.15, 1.8));
   sim.world.createCollider(R.ColliderDesc.ball(0.12), mass);
   sim.world.createImpulseJoint(
-    R.JointData.rope(0.7, { x: 0, y: 0 }, { x: 0, y: 0 }),
+    R.JointData.rope(1.9, { x: 0, y: 0 }, { x: 0, y: 0 }),
     anchor,
     mass,
     true,
@@ -59,7 +59,7 @@ export function createTestChamberSimulation(context: SimulationContext): Simulat
   let finished = false;
   let burst = 0;
   const events: ScoreEvent[] = [];
-  const gates = [1.4, 1.0, 0.6];
+  const gates = [1.5, 1.1, 0.7];
   const passed = [false, false, false];
   let lastSurvivalBucket = 0;
 
@@ -84,7 +84,7 @@ export function createTestChamberSimulation(context: SimulationContext): Simulat
     },
     step() {
       if (burst) {
-        mass.applyImpulse({ x: 0.04, y: 0.02 }, true);
+        mass.applyImpulse({ x: 0.45, y: 0.08 }, true);
         burst = 0;
       }
       sim.step();

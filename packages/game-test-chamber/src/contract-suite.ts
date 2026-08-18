@@ -68,9 +68,16 @@ export async function assertReplayRoundTrip(
   const recorder = new Recorder(game.manifest.actions);
   const actionId = firstActionId(game);
   recorder.record(12, actionId, 1);
-  sim.applyInput(actionId, 1);
-  for (let t = 0; t < ticks; t++) sim.step();
   const events = recorder.snapshot();
+  let eventIndex = 0;
+  for (let t = 0; t < ticks; t++) {
+    while (eventIndex < events.length && events[eventIndex]!.tick === t) {
+      const event = events[eventIndex]!;
+      sim.applyInput(event.actionId, event.value);
+      eventIndex += 1;
+    }
+    sim.step();
+  }
   const header = {
     formatVersion: 1,
     gameRegistryId: game.manifest.registryId,
