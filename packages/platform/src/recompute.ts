@@ -340,22 +340,27 @@ export async function closeSeason(db: Database, clock: Clock, seasonId: string):
   });
 }
 
-async function overlayAnonymisedHandles<
+async function overlayCurrentHandles<
   T extends { rows: Array<{ userId: string; handle: string | null }> },
 >(db: Database, payload: T): Promise<T> {
   const userIds = [...new Set(payload.rows.map((row) => row.userId))];
   if (userIds.length === 0) return payload;
-  const anonymised = await db
-    .select({ userId: profiles.userId })
+  const currentProfiles = await db
+    .select({ userId: profiles.userId, handle: profiles.handle, status: profiles.status })
     .from(profiles)
-    .where(and(inArray(profiles.userId, userIds), eq(profiles.status, 'anonymised')));
-  if (anonymised.length === 0) return payload;
-  const anonymisedIds = new Set(anonymised.map((profile) => profile.userId));
+    .where(inArray(profiles.userId, userIds));
+  const currentHandles = new Map(
+    currentProfiles.map((profile) => [
+      profile.userId,
+      profile.status === 'anonymised' ? 'retired' : profile.handle,
+    ]),
+  );
   return {
     ...payload,
-    rows: payload.rows.map((row) =>
-      anonymisedIds.has(row.userId) ? { ...row, handle: 'retired' } : row,
-    ),
+    rows: payload.rows.map((row) => ({
+      ...row,
+      handle: currentHandles.has(row.userId) ? currentHandles.get(row.userId)! : row.handle,
+    })),
   } as T;
 }
 
@@ -384,7 +389,7 @@ export async function readLeaderboard(
     .limit(1)
     .then((r) => r[0]);
   if (!snap) return { asOf: new Date(0).toISOString(), rows: [], nextCursor: null, viewer: null };
-  const payload = await overlayAnonymisedHandles(db, snap.payload as GameSnapshotPayload);
+  const payload = await overlayCurrentHandles(db, snap.payload as GameSnapshotPayload);
   const limit = Math.min(
     Math.max(query.limit ?? LEADERBOARD_PAGE_DEFAULT, 1),
     LEADERBOARD_PAGE_MAX,
@@ -428,5 +433,5 @@ export async function readStandings(db: Database, seasonId: string): Promise<Cha
   if (!snap) {
     return { asOf: new Date(0).toISOString(), provisional: true, rows: [] };
   }
-  return overlayAnonymisedHandles(db, snap.payload as ChampionshipPayload);
+  return overlayCurrentHandles(db, snap.payload as ChampionshipPayload);
 }

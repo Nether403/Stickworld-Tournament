@@ -1,7 +1,10 @@
 import {
   auditEvents,
+  gameBests,
   moderationActions,
   profiles,
+  rankingDirty,
+  seasonGames,
   ugcReports,
   type Database,
 } from '@stickworld/db';
@@ -168,10 +171,33 @@ export async function moderateReport(
     if (!report) throw new ApiError('ATTEMPT_NOT_FOUND');
 
     if (input.action === 'force_release_handle') {
-      await tx
+      const released = await tx
         .update(profiles)
         .set({ handle: null, handleClaimedAt: null, handleChangedAt: null })
-        .where(eq(profiles.userId, report.targetUserId));
+        .where(
+          and(
+            eq(profiles.userId, report.targetUserId),
+            ne(profiles.status, 'anonymised'),
+          ),
+        )
+        .returning({ userId: profiles.userId })
+        .then((rows) => rows[0]);
+      if (released) {
+        const affectedSeasons = await tx
+          .select({ seasonId: seasonGames.seasonId })
+          .from(gameBests)
+          .innerJoin(seasonGames, eq(seasonGames.id, gameBests.seasonGameId))
+          .where(eq(gameBests.userId, report.targetUserId));
+        for (const seasonId of new Set(affectedSeasons.map((row) => row.seasonId))) {
+          await tx
+            .insert(rankingDirty)
+            .values({ seasonId, dirtyAt: now })
+            .onConflictDoUpdate({
+              target: rankingDirty.seasonId,
+              set: { dirtyAt: now },
+            });
+        }
+      }
     } else if (input.action === 'suspend') {
       await tx
         .update(profiles)
