@@ -70,30 +70,30 @@ netcode. Plan ref 20.
 
 **Objective:** adversarial suite, UGC queue, GDPR. Plan ref 21.
 
-- [ ] 3.1 Migration: enums/tables in design §5. `upsertProfile` stores
+- [x] 3.1 Migration: enums/tables in design §5. `upsertProfile` stores
       email. `normalizeHandle` rejects `^d-[0-9a-f]{12,13}$`. Existing
       `ci` season `entry_policy = 'open'`. _(R3.8, R7)_
-- [ ] 3.2 Platform tests for finish paths: each replay decode error code
+- [x] 3.2 Platform tests for finish paths: each replay decode error code
       via `finishAttempt` (not only `replay.test.ts`); `ATTEMPT_CONSUMED`
       nonce reuse; `ATTEMPT_EXPIRED`; `RATE_LIMITED` on issue; second user
       not sharing the first user bucket. Clock: fake `now` past `expiresAt`
       while payload still looks fresh. _(R3.1)_
-- [ ] 3.3 Host/platform: `stop` without finish does not verify; expired
+- [x] 3.3 Host/platform: `stop` without finish does not verify; expired
       issued attempt cannot finish. Ranked `setPaused` still throws.
       _(R3.2, R3.3)_
-- [ ] 3.4 `POST /v1/reports` unauthenticated, IP rate-limit, hashes IP.
+- [x] 3.4 `POST /v1/reports` unauthenticated, IP rate-limit, hashes IP.
       `GET/POST /v1/moderation/...` moderator-only. Force-release handle,
       suspend, notices. Audit rows. Playwright or request tests for the
       HTTP shape. _(R3.4, R3.5, R3.6)_
-- [ ] 3.5 `GET /v1/me/export`, `POST /v1/me/delete`. After delete,
+- [x] 3.5 `GET /v1/me/export`, `POST /v1/me/delete`. After delete,
       championship rebuild still includes the anonymised row as `retired`.
       Re-login as the same Neon user must not revive the old handle
       (auth id is `deleted:…`; they would create a new profile). _(R3.7)_
-- [ ] 3.6 `next.config.ts` headers + `docs/ops/security-headers.md`. Play
+- [x] 3.6 `next.config.ts` headers + `docs/ops/security-headers.md`. Play
       e2e still loads `/play/hookline-sprint`. _(R3.10)_
-- [ ] 3.7 `/legal` page: 13+, UGC, export/delete, no prizes. Email signup
+- [x] 3.7 `/legal` page: 13+, UGC, export/delete, no prizes. Email signup
       checkbox. _(R3.11)_
-- [ ] 3.8 Invite-season issue: `NOT_INVITED` without `ranked_invites` row;
+- [x] 3.8 Invite-season issue: `NOT_INVITED` without `ranked_invites` row;
       moderator bypass; practice still 200. _(R7.1)_
 
 **Demo:** file a report as a guest, action it as moderator, see the
