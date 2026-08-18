@@ -33,3 +33,7 @@ Ramps use both slope and order so colour is never the only cue.`;
 export const CARGO_INSTRUCTIONS = `Aim with the pointer. Hold Space or the pointer to hook the carrier to a post. The crate hitch is always on. Practice can pause; ranked cannot.
 
 Posts use both position and size so colour is never the only cue.`;
+
+export const DEMOLITION_INSTRUCTIONS = `Drag to aim from the gantry; vertical drag sets power. Press Space to dive. Three dives, all count. Practice can pause; ranked cannot.
+
+Storeys use both height and value so colour is never the only cue.`;

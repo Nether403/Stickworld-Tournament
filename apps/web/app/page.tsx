@@ -193,6 +193,24 @@ export default async function HomePage(): Promise<ReactNode> {
             )}
           </p>
         </article>
+        <article>
+          <h2>Demolition Dive</h2>
+          <p>Aim three counted ragdoll dives into an authored stack of breakable cuboids.</p>
+          <p>
+            <Link href="/play/demolition-dive">Practice</Link>
+            {signedIn ? (
+              <>
+                {' '}
+                <Link href="/play/demolition-dive?mode=ranked">Ranked</Link>
+              </>
+            ) : (
+              <>
+                {' '}
+                <Link href="/auth/sign-in">Sign in to play ranked</Link>
+              </>
+            )}
+          </p>
+        </article>
       </section>
     </main>
   );

@@ -21,6 +21,7 @@ const nextConfig: NextConfig = {
     '@stickworld/game-rooftop-relay',
     '@stickworld/game-balance-bike-blitz',
     '@stickworld/game-cargo-chaos',
+    '@stickworld/game-demolition-dive',
     'phaser',
   ],
   serverExternalPackages: ['pg', 'drizzle-orm'],

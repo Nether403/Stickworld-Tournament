@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('catalogue lists live games through Cargo Chaos, not Test Chamber', async ({ page }) => {
+test('catalogue lists live games through Demolition Dive, not Test Chamber', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Hookline Sprint' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Pickaxe Ascent' })).toBeVisible();
@@ -11,6 +11,7 @@ test('catalogue lists live games through Cargo Chaos, not Test Chamber', async (
   await expect(page.getByRole('heading', { name: 'Rooftop Relay' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Balance Bike Blitz' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Cargo Chaos' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Demolition Dive' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Practice' }).first()).toBeVisible();
   await expect(page.getByText('Test Chamber')).toHaveCount(0);
 });
@@ -170,4 +171,23 @@ test('Cargo practice does not fetch Bike client', async ({ page }) => {
   await expect(page.getByTestId('cargo-stage')).toBeVisible();
   await expect(page.getByTestId('countdown')).toBeVisible({ timeout: 60_000 });
   expect(requested.some((url) => /balance-bike/i.test(url))).toBe(false);
+});
+
+test('ranked Demolition issue without a session is 401', async ({ request }) => {
+  const res = await request.post('/v1/games/demolition-dive/attempts', {
+    data: { seedPolicy: 'fixed-course' },
+  });
+  expect(res.status()).toBe(401);
+});
+
+test('Demolition practice does not fetch Cargo client', async ({ page }) => {
+  const requested: string[] = [];
+  page.on('request', (req) => {
+    requested.push(req.url());
+  });
+  await page.goto('/play/demolition-dive');
+  await expect(page.getByTestId('instructions')).toContainText('Drag to aim from the gantry');
+  await expect(page.getByTestId('demolition-stage')).toBeVisible();
+  await expect(page.getByTestId('countdown')).toBeVisible({ timeout: 60_000 });
+  expect(requested.some((url) => /cargo-chaos/i.test(url))).toBe(false);
 });

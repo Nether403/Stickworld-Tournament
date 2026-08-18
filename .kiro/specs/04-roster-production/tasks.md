@@ -99,17 +99,17 @@ hashes; tiny replay; lazy-load; legal grep.
 
 **Objective:** last game, or an explicit cut.
 
-- [ ] 4.1 Pre-flight: confirm Branch A still in force (it is). If a later
+- [x] 4.1 Pre-flight: confirm Branch A still in force (it is). If a later
       Rapier pin change landed (it must not), stop. _(R4.1)_
-- [ ] 4.2 Breakable + chain-reaction + deterministic despawn in `physics-kit`
+- [x] 4.2 Breakable + chain-reaction + deterministic despawn in `physics-kit`
       with a max-body kit fixture (four runtimes) **before** the game view.
       Caps from `docs/games/demolition-dive.md`. _(R4.2, R4.3, R4.4)_
-- [ ] 4.3 `games/demolition-dive` simulation: three dives, sum, pose reset
+- [x] 4.3 `games/demolition-dive` simulation: three dives, sum, pose reset
       without new bodies, large replay ≤ 81_920. Goldens. _(R4.5)_
-- [ ] 4.4 Client + `/play/demolition-dive` + seed `registry_id = 10` **or**,
+- [x] 4.4 Client + `/play/demolition-dive` + seed `registry_id = 10` **or**,
       if 4.2 fails closed, write the cut in the game doc and championship
       UI copies "nine games / 9,000 max" — no replacement title. _(R4.1)_
-- [ ] 4.5 Checklist, lazy-load, catalogue. Ten championship columns if it
+- [x] 4.5 Checklist, lazy-load, catalogue. Ten championship columns if it
       shipped; nine if cut. _(R6)_
 
 **Demo:** launch roster complete, or a recorded nine-game championship.

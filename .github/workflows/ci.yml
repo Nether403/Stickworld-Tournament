@@ -63,6 +63,7 @@ jobs:
       - run: pnpm --filter @stickworld/game-rooftop-relay score:browser
       - run: pnpm --filter @stickworld/game-balance-bike-blitz score:browser
       - run: pnpm --filter @stickworld/game-cargo-chaos score:browser
+      - run: pnpm --filter @stickworld/game-demolition-dive score:browser
       - run: pnpm --filter @stickworld/web e2e
 
   negative:

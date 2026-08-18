@@ -100,6 +100,15 @@ async function loadGame(registryId: number): Promise<StickworldGame | undefined>
       return undefined;
     }
   }
+  if (registryId === 10) {
+    const url = new URL('../../../../games/demolition-dive/dist/index.js', import.meta.url);
+    try {
+      const mod = (await import(url.href)) as { demolitionDiveGame: StickworldGame };
+      return mod.demolitionDiveGame;
+    } catch {
+      return undefined;
+    }
+  }
   return undefined;
 }
 

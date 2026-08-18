@@ -30,6 +30,7 @@
     "@stickworld/game-rooftop-relay": "workspace:*",
     "@stickworld/game-balance-bike-blitz": "workspace:*",
     "@stickworld/game-cargo-chaos": "workspace:*",
+    "@stickworld/game-demolition-dive": "workspace:*",
     "@stickworld/replay": "workspace:*",
     "@stickworld/sim-core": "workspace:*",
     "drizzle-orm": "0.45.2",

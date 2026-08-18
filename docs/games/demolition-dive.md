@@ -106,4 +106,13 @@ title.
 
 ## Kit finding log
 
-Pre-flight: Branch A. Rapier must stay 0.20.0 `-compat`.
+Pre-flight: Branch A. Rapier stays `0.20.0` `-compat`.
+
+Fracture uses `contactImpulse` on manifolds, `|n| > 4.0`. Same-tick chain is
+index-ordered with depth cap 3. Despawn parks `(-10,-10)` and `collider.setEnabled(false)`.
+Never `destroyRigidBody`. Floor sits under the stack only so a miss can fall.
+
+Max-body four-runtime hashes (28 bodies) live in `packages/physics-kit/conformance/golden/max-body.json`.
+
+Sample freeze: score **528**, hash **`7a45fea1ee107627`**, `SAMPLE_TICKS` 480.
+
