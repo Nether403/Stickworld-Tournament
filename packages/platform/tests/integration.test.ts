@@ -599,6 +599,56 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
     );
   }, 120_000);
 
+  it('serves frozen rankings and overlays anonymised handles without changing snapshot bytes', async () => {
+    const { season, sg } = await createIsolatedSeason(
+      db,
+      `frozen-read-${randomUUID().slice(0, 8)}`,
+    );
+    const profile = await upsertProfile(db, `frozen-read-${randomUUID()}`);
+    const handle = `f${randomUUID().slice(0, 8)}`;
+    await claimHandle(db, c.clock, profile.userId, handle);
+    await insertVerifiedBest(db, profile.userId, sg.id, 321n);
+    await recomputeSeason(db, c.clock, season.id, { force: true });
+    await closeSeason(db, c.clock, season.id);
+
+    const frozen = await db
+      .select()
+      .from(rankingSnapshots)
+      .where(and(eq(rankingSnapshots.seasonId, season.id), eq(rankingSnapshots.frozen, true)));
+    const frozenGame = frozen.find((row) => row.scope === 'game');
+    const frozenChampionship = frozen.find((row) => row.scope === 'championship');
+    const frozenBytes = new Map(frozen.map((row) => [row.id, JSON.stringify(row.payload)]));
+    expect(frozenGame).toBeTruthy();
+    expect(frozenChampionship).toBeTruthy();
+
+    const board = await readLeaderboard(db, season.id, sg.id, {
+      viewerUserId: profile.userId,
+    });
+    const standings = await readStandings(db, season.id);
+    expect(board.rows).toEqual((frozenGame?.payload as { rows: unknown[] }).rows);
+    expect(board.viewer).toEqual((frozenGame?.payload as { rows: unknown[] }).rows[0]);
+    expect(standings).toEqual(frozenChampionship?.payload);
+
+    await anonymiseProfile(db, c.clock, profile.userId);
+    const anonymisedBoard = await readLeaderboard(db, season.id, sg.id, {
+      viewerUserId: profile.userId,
+    });
+    const anonymisedStandings = await readStandings(db, season.id);
+    expect(anonymisedBoard.rows[0]).toMatchObject({ rank: 1, score: '321', handle: 'retired' });
+    expect(anonymisedBoard.viewer).toMatchObject({ rank: 1, score: '321', handle: 'retired' });
+    expect(anonymisedStandings.rows[0]).toMatchObject({
+      rank: 1,
+      userId: profile.userId,
+      handle: 'retired',
+    });
+
+    const after = await db
+      .select()
+      .from(rankingSnapshots)
+      .where(and(eq(rankingSnapshots.seasonId, season.id), eq(rankingSnapshots.frozen, true)));
+    expect(new Map(after.map((row) => [row.id, JSON.stringify(row.payload)]))).toEqual(frozenBytes);
+  });
+
   it('rotates the daily board, archives yesterday, and enforces the cap', async () => {
     const day1 = new Date('2026-08-18T12:00:00.000Z');
     await rotateDaily(db, { randomBytes: (n) => randomBytes(n) }, day1);
@@ -1036,6 +1086,85 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
     ).not.toHaveLength(0);
   });
 
+  it('serializes attempt issuance with season closure', async () => {
+    const now = new Date('2026-08-18T22:30:00.000Z');
+    const suffix = randomUUID().replaceAll('-', '');
+    const [season] = await db
+      .insert(seasons)
+      .values({
+        slug: `issue-close-${suffix}`,
+        startsAt: new Date('2020-01-01T00:00:00.000Z'),
+        endsAt: new Date('2099-01-01T00:00:00.000Z'),
+        status: 'active',
+        rulesVersion: 1,
+      })
+      .returning();
+    const gameSlug = `issue-close-game-${suffix}`;
+    await seedGame(
+      db,
+      season!.id,
+      {
+        slug: gameSlug,
+        registryId: 20_000 + (Number.parseInt(suffix.slice(0, 8), 16) % 40_000),
+        maxRunTicks: 600,
+        seedPolicies: ['fixed-course'],
+      },
+      now,
+    );
+    const sg = await db
+      .select({ id: seasonGames.id })
+      .from(seasonGames)
+      .innerJoin(games, eq(games.id, seasonGames.gameId))
+      .where(eq(games.slug, gameSlug))
+      .then((rows) => rows[0]);
+    const profile = await upsertProfile(db, `issue-close-${randomUUID()}`);
+    await claimHandle(db, { now: () => now }, profile.userId, `x${randomUUID().slice(0, 8)}`);
+    const functionName = `delay_attempt_insert_${suffix}`;
+    const triggerName = `delay_attempt_insert_trigger_${suffix}`;
+    await pool.query(`
+      CREATE FUNCTION ${functionName}() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN
+        PERFORM pg_sleep(1);
+        RETURN NEW;
+      END
+      $$;
+      CREATE TRIGGER ${triggerName}
+      BEFORE INSERT ON attempts
+      FOR EACH ROW
+      WHEN (NEW.season_game_id = '${sg!.id}')
+      EXECUTE FUNCTION ${functionName}();
+    `);
+
+    try {
+      const issueCtx = goldenEntropy();
+      issueCtx.clock = { now: () => now };
+      const issuing = issueAttempt(db, issueCtx, {
+        userId: profile.userId,
+        gameSlug,
+        seedPolicy: 'fixed-course',
+        ip: '203.0.113.111',
+      });
+      await waitForSleepingAttemptInsert(pool);
+      const closing = closeSeason(db, { now: () => now }, season!.id);
+      await Promise.all([issuing, closing]);
+
+      const closedSeason = await db
+        .select({ status: seasons.status })
+        .from(seasons)
+        .where(eq(seasons.id, season!.id))
+        .then((rows) => rows[0]);
+      const inFlight = await db
+        .select({ id: attempts.id })
+        .from(attempts)
+        .where(and(eq(attempts.seasonGameId, sg!.id), eq(attempts.status, 'issued')));
+      expect(closedSeason?.status).toBe('closing');
+      expect(inFlight).toHaveLength(1);
+    } finally {
+      await pool.query(`DROP TRIGGER IF EXISTS ${triggerName} ON attempts`);
+      await pool.query(`DROP FUNCTION IF EXISTS ${functionName}()`);
+    }
+  });
+
   it.each(['closing', 'closed'] as const)(
     'rejects finish when its season is %s',
     async (seasonStatus) => {
@@ -1193,6 +1322,49 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
     ).toHaveLength(1);
   });
 
+  it('rolls back a report when its audit insert fails', async () => {
+    const target = await upsertProfile(db, `report-atomic-target-${randomUUID()}`);
+    const details = `audit failure ${randomUUID()}`;
+    const suffix = randomUUID().replaceAll('-', '');
+    const functionName = `fail_report_audit_${suffix}`;
+    const triggerName = `fail_report_audit_trigger_${suffix}`;
+    await pool.query(`
+      CREATE FUNCTION ${functionName}() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN
+        RAISE EXCEPTION 'forced report audit failure';
+      END
+      $$;
+      CREATE TRIGGER ${triggerName}
+      BEFORE INSERT ON audit_events
+      FOR EACH ROW
+      WHEN (
+        NEW.action = 'ugc.report'
+        AND NEW.request_meta->>'targetUserId' = '${target.userId}'
+      )
+      EXECUTE FUNCTION ${functionName}();
+    `);
+
+    try {
+      await expect(
+        fileReport(db, c, {
+          ip: '198.51.100.202',
+          targetUserId: target.userId,
+          reasonCode: 'other',
+          details,
+        }),
+      ).rejects.toThrow('forced report audit failure');
+      expect(
+        await db
+          .select()
+          .from(ugcReports)
+          .where(and(eq(ugcReports.targetUserId, target.userId), eq(ugcReports.details, details))),
+      ).toHaveLength(0);
+    } finally {
+      await pool.query(`DROP TRIGGER IF EXISTS ${triggerName} ON audit_events`);
+      await pool.query(`DROP FUNCTION IF EXISTS ${functionName}()`);
+    }
+  });
+
   it('rate-limits reports by hashed IP without sharing another IP bucket', async () => {
     const target = await upsertProfile(db, `report-rate-target-${randomUUID()}`);
     const reportCtx = ctx({ clock: { now: () => new Date('2026-08-19T00:00:00.000Z') } });
@@ -1345,6 +1517,25 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
     }
   });
 });
+
+async function waitForSleepingAttemptInsert(pool: pg.Pool): Promise<void> {
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    const result = await pool.query<{ found: boolean }>(`
+      SELECT EXISTS (
+        SELECT 1
+        FROM pg_stat_activity
+        WHERE datname = current_database()
+          AND state = 'active'
+          AND wait_event = 'PgSleep'
+          AND query ILIKE '%insert into "attempts"%'
+      ) AS found
+    `);
+    if (result.rows[0]?.found) return;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  throw new Error('timed out waiting for delayed attempt insert');
+}
 
 async function loadOrderedThenRebuild(
   db: Database,
