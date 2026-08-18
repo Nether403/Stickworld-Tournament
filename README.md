@@ -49,6 +49,7 @@ The fork decision lives in [`docs/adr/0001-determinism-fork.md`](docs/adr/0001-d
 ```bash
 pnpm build
 pnpm replay:verify packages/game-test-chamber/fixtures/sample.swr
+pnpm replay:verify games/hookline-sprint/fixtures/sample.swr
 ```
 
 Test Chamber (the permanent contract game) is `@stickworld/game-test-chamber`.
