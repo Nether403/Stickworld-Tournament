@@ -58,6 +58,7 @@ jobs:
       - run: pnpm --filter @stickworld/game-launch-lab score:browser
       - run: pnpm --filter @stickworld/game-ragdoll-archery-rush score:browser
       - run: pnpm --filter @stickworld/game-hammer-throw-havoc score:browser
+      - run: pnpm --filter @stickworld/game-pogo-tower score:browser
       - run: pnpm --filter @stickworld/web e2e
 
   negative:

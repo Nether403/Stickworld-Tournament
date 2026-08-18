@@ -26,6 +26,7 @@
     "@stickworld/game-launch-lab": "workspace:*",
     "@stickworld/game-ragdoll-archery-rush": "workspace:*",
     "@stickworld/game-hammer-throw-havoc": "workspace:*",
+    "@stickworld/game-pogo-tower": "workspace:*",
     "@stickworld/replay": "workspace:*",
     "@stickworld/sim-core": "workspace:*",
     "drizzle-orm": "0.45.2",

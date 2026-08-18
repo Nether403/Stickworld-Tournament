@@ -121,6 +121,24 @@ export default async function HomePage(): Promise<ReactNode> {
             )}
           </p>
         </article>
+        <article>
+          <h2>Pogo Tower</h2>
+          <p>Auto-bounce and lean up a weekly-seeded tower of shrinking ledges.</p>
+          <p>
+            <Link href="/play/pogo-tower">Practice</Link>
+            {signedIn ? (
+              <>
+                {' '}
+                <Link href="/play/pogo-tower?mode=ranked">Ranked</Link>
+              </>
+            ) : (
+              <>
+                {' '}
+                <Link href="/auth/sign-in">Sign in to play ranked</Link>
+              </>
+            )}
+          </p>
+        </article>
       </section>
     </main>
   );

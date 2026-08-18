@@ -68,6 +68,9 @@ importers:
       '@stickworld/game-pickaxe-ascent':
         specifier: workspace:*
         version: link:../../games/pickaxe-ascent
+      '@stickworld/game-pogo-tower':
+        specifier: workspace:*
+        version: link:../../games/pogo-tower
       '@stickworld/game-ragdoll-archery-rush':
         specifier: workspace:*
         version: link:../../games/ragdoll-archery-rush
@@ -135,6 +138,9 @@ importers:
       '@stickworld/game-pickaxe-ascent':
         specifier: workspace:*
         version: link:../../games/pickaxe-ascent
+      '@stickworld/game-pogo-tower':
+        specifier: workspace:*
+        version: link:../../games/pogo-tower
       '@stickworld/game-ragdoll-archery-rush':
         specifier: workspace:*
         version: link:../../games/ragdoll-archery-rush
@@ -288,6 +294,49 @@ importers:
         version: 3.2.7(@types/node@22.19.21)(tsx@4.23.12)
 
   games/pickaxe-ascent:
+    dependencies:
+      '@stickworld/game-host':
+        specifier: workspace:*
+        version: link:../../packages/game-host
+      '@stickworld/input':
+        specifier: workspace:*
+        version: link:../../packages/input
+      '@stickworld/physics-kit':
+        specifier: workspace:*
+        version: link:../../packages/physics-kit
+      '@stickworld/replay':
+        specifier: workspace:*
+        version: link:../../packages/replay
+      '@stickworld/scoring':
+        specifier: workspace:*
+        version: link:../../packages/scoring
+      '@stickworld/sim-core':
+        specifier: workspace:*
+        version: link:../../packages/sim-core
+      phaser:
+        specifier: 4.2.1
+        version: 4.2.1
+    devDependencies:
+      '@playwright/test':
+        specifier: 1.62.1
+        version: 1.62.1
+      '@stickworld/config-ts':
+        specifier: workspace:*
+        version: link:../../packages/config-ts
+      '@stickworld/game-test-chamber':
+        specifier: workspace:*
+        version: link:../../packages/game-test-chamber
+      esbuild:
+        specifier: 0.28.2
+        version: 0.28.2
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 3.2.7
+        version: 3.2.7(@types/node@22.19.21)(tsx@4.23.12)
+
+  games/pogo-tower:
     dependencies:
       '@stickworld/game-host':
         specifier: workspace:*
@@ -526,6 +575,9 @@ importers:
       '@stickworld/game-pickaxe-ascent':
         specifier: workspace:*
         version: link:../../games/pickaxe-ascent
+      '@stickworld/game-pogo-tower':
+        specifier: workspace:*
+        version: link:../../games/pogo-tower
       '@stickworld/game-ragdoll-archery-rush':
         specifier: workspace:*
         version: link:../../games/ragdoll-archery-rush

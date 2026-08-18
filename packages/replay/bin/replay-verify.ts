@@ -64,6 +64,15 @@ async function loadGame(registryId: number): Promise<StickworldGame | undefined>
       return undefined;
     }
   }
+  if (registryId === 6) {
+    const url = new URL('../../../../games/pogo-tower/dist/index.js', import.meta.url);
+    try {
+      const mod = (await import(url.href)) as { pogoTowerGame: StickworldGame };
+      return mod.pogoTowerGame;
+    } catch {
+      return undefined;
+    }
+  }
   return undefined;
 }
 

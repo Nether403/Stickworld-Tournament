@@ -51,22 +51,22 @@ hashes; tiny replay; lazy-load; legal grep.
 
 **Objective:** first seeded generator; first kinematic movers; weekly issue.
 
-- [ ] 2.1 Generator harness: `createTower(prng)` returns platforms in stable
+- [x] 2.1 Generator harness: `createTower(prng)` returns platforms in stable
       order. Fixture: same seed → identical geometry dump in Node. _(R2.1)_
-- [ ] 2.2 Four-runtime **geometry** fixture (separate file from gameplay
+- [x] 2.2 Four-runtime **geometry** fixture (separate file from gameplay
       hashes). Same seed, same ordered `(x,y,hx,hy)` list and same hash.
       _(R2.2)_
-- [ ] 2.3 `physics-kit` kinematic moving platform helper + kit test. Pogo
+- [x] 2.3 `physics-kit` kinematic moving platform helper + kit test. Pogo
       simulation uses it. Pickaxe goldens MUST stay `6b03896db5837763`.
       _(R2.4)_
-- [ ] 2.4 `games/pogo-tower` gameplay goldens, small replay ≤ 15_360,
+- [x] 2.4 `games/pogo-tower` gameplay goldens, small replay ≤ 15_360,
       `./client`, `/play/pogo-tower`. _(R2, R5)_
-- [ ] 2.5 Weekly seed platform increment: `issueAttempt` accepts
+- [x] 2.5 Weekly seed platform increment: `issueAttempt` accepts
       `weekly-seed`; ranked client union; `/v1` body; rotation writes the
       ISO-week Monday into `daily_boards` (preferred) or a logged
       `weekly_boards` migration. Test: championship payload ignores a verified
       weekly Pogo result. _(R2.3, ADR-0006)_
-- [ ] 2.6 Seed `registry_id = 6` with `season_games` for `weekly-seed` (and
+- [x] 2.6 Seed `registry_id = 6` with `season_games` for `weekly-seed` (and
       `daily-seed` if issuance tests need it). Catalogue card. Lazy-load e2e.
       _(R5)_
 

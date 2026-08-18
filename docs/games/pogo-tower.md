@@ -98,5 +98,16 @@ maxScoreEvents: 512
 
 ## Kit finding log
 
-Wave B may extend `/v1` issue to `weekly-seed`. Prefer storing ISO-week Monday
-in `daily_boards.utc_date`. Schema migration = stop and review.
+Wave B extended `/v1` issue to `weekly-seed`. ISO-week Monday is stored in
+`daily_boards.utc_date`. `rotateDaily` also archives last Monday and inserts
+this Monday / next Monday for `weekly-seed` rows. No `weekly_boards` table.
+Cron can stay `rotate-daily`. Championship recompute still uses only
+`fixed-course`; Pogo is **not** seeded as `fixed-course`.
+
+Spawn `(5.0, 1.6)` sits **below** ledge 0 (`y = 2.0`). v1 applies one
+pogo-equivalent `setLinvel({ x: 0, y: 9 })` at tick 0 so the climber can reach
+the tower without treating the floor as a ledge. No extra bodies.
+
+Sample freeze: score **230**, hash **`14ad7160e71342f6`**, `SAMPLE_TICKS` 360.
+Lean **90** from tick 0 (left of spawn; seed `[5,6,7,8]` places early ledges
+on the left).

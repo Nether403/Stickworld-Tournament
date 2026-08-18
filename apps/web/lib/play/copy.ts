@@ -17,3 +17,7 @@ Targets use both colour and size so colour is never the only cue.`;
 export const HAMMER_INSTRUCTIONS = `Hold D or Right to spin the hammer. Press Space to release. Touch: hold to spin, release the hold to throw. Three throws, all count. Practice can pause; ranked cannot.
 
 Gates use both colour and order so colour is never the only cue.`;
+
+export const POGO_INSTRUCTIONS = `Auto-bounce on ledges. Lean with A/D or by moving the pointer. The week's seed is the tower. Practice can pause; ranked cannot.
+
+Ledges use both colour and motion so colour is never the only cue: static ledges are muted, movers are accent.`;
