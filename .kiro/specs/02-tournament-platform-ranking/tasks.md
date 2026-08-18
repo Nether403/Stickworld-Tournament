@@ -10,9 +10,9 @@ Requirement references point at `requirements.md`.
 **Executed 2026-08-18.** `pnpm lint`, `pnpm typecheck`, `pnpm build`, and
 `pnpm test` (81 passed / 22 files). Honest Test Chamber: score 302, hash
 `e6ee35729a0c77b3`. Unauthenticated `POST /v1/games/test-chamber/attempts`
-returns `401 UNAUTHENTICATED`. Sign-in UI shows Google + GitHub. GitHub
-`schema` job still needs repository secrets `NEON_API_KEY` and
-`NEON_PROJECT_ID=still-mouse-62565389`. Do not start Spec 3.
+returns `401 UNAUTHENTICATED`. Sign-in UI shows Google + GitHub. Repository
+Actions secrets `NEON_API_KEY` and `NEON_PROJECT_ID` are set; schema CI must
+still show they reach the runner. Do not start Spec 3.
 
 ---
 
