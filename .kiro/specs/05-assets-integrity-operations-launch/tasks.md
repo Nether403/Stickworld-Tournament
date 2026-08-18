@@ -48,18 +48,18 @@ without keys prints skipped.
 **Objective:** formal `InputSource`, three-source identity, ADR. No
 netcode. Plan ref 20.
 
-- [ ] 2.1 `packages/input/src/source.ts`: `QuantisedInput`, `InputSource`,
+- [x] 2.1 `packages/input/src/source.ts`: `QuantisedInput`, `InputSource`,
       `LocalInputSource`, `ReplayInputSource`, `ScriptedInputSource`. Unit
       tests for tick grouping. _(R2.1, R2.2)_
-- [ ] 2.2 `playReplay` applies via `ReplayInputSource`. GameHost `tickClock`
+- [x] 2.2 `playReplay` applies via `ReplayInputSource`. GameHost `tickClock`
       applies via `LocalInputSource`. Recorder still used for encode.
       _(R2.4)_
-- [ ] 2.3 Three-source test in `packages/input/tests/source-identity.test.ts`
+- [x] 2.3 Three-source test in `packages/input/tests/source-identity.test.ts`
       (or game-test-chamber): same fixture, three sims, equal score + hash.
       _(R2.3)_
-- [ ] 2.4 `docs/adr/0008-pvp-seam.md`. Explicitly list what is not built.
+- [x] 2.4 `docs/adr/0008-pvp-seam.md`. Explicitly list what is not built.
       _(R2.5, R2.6)_
-- [ ] 2.5 Re-run Hookline + Pickaxe Node goldens and `pnpm replay:verify`
+- [x] 2.5 Re-run Hookline + Pickaxe Node goldens and `pnpm replay:verify`
       on both samples. Byte-identical. _(R2.4)_
 
 **Demo:** three-source test green plus ADR-0008. No room code in the diff.
