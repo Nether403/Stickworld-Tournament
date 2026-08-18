@@ -1,5 +1,5 @@
 {
-  "name": "@stickworld/game-host",
+  "name": "@stickworld/telemetry",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -13,12 +13,6 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
-  },
-  "dependencies": {
-    "@stickworld/input": "workspace:*",
-    "@stickworld/replay": "workspace:*",
-    "@stickworld/sim-core": "workspace:*",
-    "@stickworld/telemetry": "workspace:*"
   },
   "devDependencies": {
     "@stickworld/config-ts": "workspace:*",

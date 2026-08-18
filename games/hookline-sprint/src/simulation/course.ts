@@ -1,3 +1,4 @@
+import { comboHundredths } from '@stickworld/scoring';
 import { abs, atan, atan2, cos, floor, hypot, max, min, sin } from '@stickworld/sim-core';
 
 export const PI = 4 * atan(1);
@@ -41,9 +42,7 @@ export const GATES = [
   { x: 52, points: 500 },
 ] as const;
 
-export function comboHundredths(streak: number): number {
-  return 100 + 25 * min(streak, 4);
-}
+export { comboHundredths };
 
 export function aimVector(degrees: number): { x: number; y: number } {
   const rad = (degrees * PI) / 180;

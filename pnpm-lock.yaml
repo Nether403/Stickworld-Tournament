@@ -65,6 +65,9 @@ importers:
       '@stickworld/sim-core':
         specifier: workspace:*
         version: link:../../packages/sim-core
+      '@stickworld/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       drizzle-orm:
         specifier: 0.45.2
         version: 0.45.2(@types/pg@8.23.1)(kysely@0.29.5)(pg@8.23.0)
@@ -136,9 +139,18 @@ importers:
       '@stickworld/game-host':
         specifier: workspace:*
         version: link:../../packages/game-host
+      '@stickworld/input':
+        specifier: workspace:*
+        version: link:../../packages/input
+      '@stickworld/physics-kit':
+        specifier: workspace:*
+        version: link:../../packages/physics-kit
       '@stickworld/replay':
         specifier: workspace:*
         version: link:../../packages/replay
+      '@stickworld/scoring':
+        specifier: workspace:*
+        version: link:../../packages/scoring
       '@stickworld/sim-core':
         specifier: workspace:*
         version: link:../../packages/sim-core
@@ -225,12 +237,18 @@ importers:
 
   packages/game-host:
     dependencies:
+      '@stickworld/input':
+        specifier: workspace:*
+        version: link:../input
       '@stickworld/replay':
         specifier: workspace:*
         version: link:../replay
       '@stickworld/sim-core':
         specifier: workspace:*
         version: link:../sim-core
+      '@stickworld/telemetry':
+        specifier: workspace:*
+        version: link:../telemetry
     devDependencies:
       '@stickworld/config-ts':
         specifier: workspace:*
@@ -260,6 +278,34 @@ importers:
       esbuild:
         specifier: 0.28.2
         version: 0.28.2
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 3.2.7
+        version: 3.2.7(@types/node@22.19.21)(tsx@4.23.12)
+
+  packages/input:
+    devDependencies:
+      '@stickworld/config-ts':
+        specifier: workspace:*
+        version: link:../config-ts
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 3.2.7
+        version: 3.2.7(@types/node@22.19.21)(tsx@4.23.12)
+
+  packages/physics-kit:
+    dependencies:
+      '@stickworld/sim-core':
+        specifier: workspace:*
+        version: link:../sim-core
+    devDependencies:
+      '@stickworld/config-ts':
+        specifier: workspace:*
+        version: link:../config-ts
       typescript:
         specifier: 5.9.3
         version: 5.9.3
@@ -341,6 +387,22 @@ importers:
         specifier: 3.2.7
         version: 3.2.7(@types/node@22.19.21)(tsx@4.23.12)
 
+  packages/scoring:
+    dependencies:
+      '@stickworld/sim-core':
+        specifier: workspace:*
+        version: link:../sim-core
+    devDependencies:
+      '@stickworld/config-ts':
+        specifier: workspace:*
+        version: link:../config-ts
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 3.2.7
+        version: 3.2.7(@types/node@22.19.21)(tsx@4.23.12)
+
   packages/sim-core:
     dependencies:
       '@dimforge/rapier2d-compat':
@@ -362,6 +424,34 @@ importers:
       vitest:
         specifier: 3.2.7
         version: 3.2.7(@types/node@22.19.21)(tsx@4.23.12)
+
+  packages/telemetry:
+    devDependencies:
+      '@stickworld/config-ts':
+        specifier: workspace:*
+        version: link:../config-ts
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 3.2.7
+        version: 3.2.7(@types/node@22.19.21)(tsx@4.23.12)
+
+  packages/ui:
+    dependencies:
+      react:
+        specifier: 19.2.8
+        version: 19.2.8
+    devDependencies:
+      '@stickworld/config-ts':
+        specifier: workspace:*
+        version: link:../config-ts
+      '@types/react':
+        specifier: 19.2.18
+        version: 19.2.18
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
 
 packages:
 

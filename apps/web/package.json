@@ -17,6 +17,7 @@
     "@stickworld/platform": "workspace:*",
     "@stickworld/game-host": "workspace:*",
     "@stickworld/game-hookline-sprint": "workspace:*",
+    "@stickworld/ui": "workspace:*",
     "@stickworld/sim-core": "workspace:*",
     "next": "16.3.1",
     "pg": "8.23.0",

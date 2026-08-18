@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
-import { PIXELS_PER_METRE } from '@stickworld/sim-core';
 import type { GameView } from '@stickworld/game-host';
+import { nudgeAimDegrees } from '@stickworld/input';
+import { PIXELS_PER_METRE } from '@stickworld/sim-core';
 import {
   ANCHOR_RADIUS,
   ANCHORS,
@@ -102,13 +103,7 @@ export class HooklineScene extends Phaser.Scene {
       const up = this.keyW.isDown || this.keyUp.isDown;
       const down = this.keyS.isDown || this.keyDown.isDown;
       if (left || right || up || down) {
-        let deg = this.latest.aim;
-        if (left) deg -= 3;
-        if (right) deg += 3;
-        if (up) deg += 3;
-        if (down) deg -= 3;
-        deg = ((deg % 360) + 360) % 360;
-        this.handlers.onAim(deg);
+        this.handlers.onAim(nudgeAimDegrees(this.latest.aim, left, right, up, down));
       }
     }
     this.draw();

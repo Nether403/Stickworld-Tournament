@@ -20,6 +20,15 @@ export default defineConfig({
       '@stickworld/game-test-chamber/contract-suite': fileURLToPath(
         new URL('../../packages/game-test-chamber/src/contract-suite.ts', import.meta.url),
       ),
+      '@stickworld/physics-kit': fileURLToPath(
+        new URL('../../packages/physics-kit/src/index.ts', import.meta.url),
+      ),
+      '@stickworld/scoring': fileURLToPath(
+        new URL('../../packages/scoring/src/index.ts', import.meta.url),
+      ),
+      '@stickworld/input': fileURLToPath(
+        new URL('../../packages/input/src/index.ts', import.meta.url),
+      ),
     },
   },
 });

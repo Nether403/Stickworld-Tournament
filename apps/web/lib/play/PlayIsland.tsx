@@ -3,7 +3,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { GameHost, createRankedClient, type HostPhase, type PlayMode } from '@stickworld/game-host';
 import type { ScoreEvent } from '@stickworld/sim-core';
-import { HOOKLINE_INSTRUCTIONS, tokens } from './copy';
+import {
+  Countdown,
+  LeaderboardWidget,
+  PauseControl,
+  PbToast,
+  ResultsTable,
+  tokens,
+} from '@stickworld/ui';
+import { HOOKLINE_INSTRUCTIONS } from './copy';
 
 interface FrameSnap {
   score: number;
@@ -20,6 +28,7 @@ export default function PlayIsland(props: { slug: string; mode: PlayMode }) {
   const [error, setError] = useState<string>('');
   const [verify, setVerify] = useState<string>('');
   const [countdown, setCountdown] = useState(3);
+  const [seasonId, setSeasonId] = useState('');
 
   useEffect(() => {
     const parent = parentRef.current;
@@ -124,6 +133,15 @@ export default function PlayIsland(props: { slug: string; mode: PlayMode }) {
     };
   }, [phase, props.mode]);
 
+  useEffect(() => {
+    void (async () => {
+      const res = await fetch('/v1/seasons/current');
+      if (!res.ok) return;
+      const body = (await res.json()) as { season?: { id?: string } };
+      if (body.season?.id) setSeasonId(body.season.id);
+    })();
+  }, []);
+
   return (
     <div style={{ fontFamily: tokens.font, color: tokens.ink, background: tokens.bg, minHeight: '100vh', padding: 16 }}>
       <h1>Hookline Sprint</h1>
@@ -133,19 +151,17 @@ export default function PlayIsland(props: { slug: string; mode: PlayMode }) {
       <p>
         Mode: {props.mode} · Phase: {phase} · Score: {frame.score} · Tick: {frame.tick}
       </p>
-      {phase === 'countdown' ? <p data-testid="countdown">Countdown {countdown}</p> : null}
+      {phase === 'countdown' ? <Countdown seconds={countdown} /> : null}
       {props.mode === 'practice' ? (
         <p>
-          <button
-            type="button"
-            onClick={() => {
+          <PauseControl
+            paused={phase === 'paused'}
+            onToggle={() => {
               const host = hostRef.current;
               if (!host) return;
               host.setPaused(!host.paused);
             }}
-          >
-            {phase === 'paused' ? 'Resume' : 'Pause'}
-          </button>
+          />
         </p>
       ) : (
         <p>Ranked runs cannot pause.</p>
@@ -163,27 +179,9 @@ export default function PlayIsland(props: { slug: string; mode: PlayMode }) {
       {phase === 'results' ? (
         <section>
           <h2>Results</h2>
-          {verify ? <p data-testid="verify-status">{verify}</p> : null}
-          <table>
-            <thead>
-              <tr>
-                <th>Tick</th>
-                <th>Type</th>
-                <th>Points</th>
-                <th>Multiplier</th>
-              </tr>
-            </thead>
-            <tbody>
-              {frame.events.map((event, index) => (
-                <tr key={`${event.tick}-${event.type}-${index}`}>
-                  <td>{event.tick}</td>
-                  <td>{event.type}</td>
-                  <td>{event.points}</td>
-                  <td>{event.multiplier}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <PbToast message={verify} />
+          {seasonId ? <LeaderboardWidget seasonId={seasonId} gameSlug={props.slug} /> : null}
+          <ResultsTable events={frame.events} />
         </section>
       ) : null}
     </div>

@@ -1,4 +1,13 @@
 import {
+  castTaggedRay,
+  createFixedBall,
+  createFixedCuboid,
+  createLockedCapsule,
+  createRopeJoint,
+  createVerticalGateSensor,
+  destroyImpulseJoint,
+} from '@stickworld/physics-kit';
+import {
   aggregateScore,
   assertPhysicsBudget,
   type ScoreEvent,
@@ -68,41 +77,39 @@ export function createHooklineSimulation(context: SimulationContext): Simulation
 
   const tags = new Map<number, string>();
 
-  const ledgeBody = sim.createRigidBody(
-    R.RigidBodyDesc.fixed().setTranslation(START_LEDGE.x, START_LEDGE.y),
+  createFixedCuboid(
+    sim,
+    R,
+    START_LEDGE.x,
+    START_LEDGE.y,
+    START_LEDGE.hx,
+    START_LEDGE.hy,
+    tags,
+    'ledge',
   );
-  const ledgeCollider = sim.world.createCollider(
-    R.ColliderDesc.cuboid(START_LEDGE.hx, START_LEDGE.hy),
-    ledgeBody,
-  );
-  tags.set(ledgeCollider.handle, 'ledge');
 
   for (const pos of ANCHORS) {
-    const body = sim.createRigidBody(R.RigidBodyDesc.fixed().setTranslation(pos.x, pos.y));
-    const collider = sim.world.createCollider(R.ColliderDesc.ball(ANCHOR_RADIUS), body);
-    tags.set(collider.handle, 'anchor');
+    createFixedBall(sim, R, pos.x, pos.y, ANCHOR_RADIUS, tags, 'anchor');
   }
 
   for (const gate of GATES) {
-    const body = sim.createRigidBody(R.RigidBodyDesc.fixed().setTranslation(gate.x, 8));
-    const collider = sim.world.createCollider(
-      R.ColliderDesc.cuboid(0.05, 10).setSensor(true),
-      body,
-    );
-    tags.set(collider.handle, 'gate');
+    createVerticalGateSensor(sim, R, gate.x, tags, 'gate');
   }
 
-  const player = sim.createRigidBody(
-    R.RigidBodyDesc.dynamic()
-      .setTranslation(PLAYER_START.x, PLAYER_START.y)
-      .setLinearDamping(PLAYER_DAMPING)
-      .lockRotations(),
+  const player = createLockedCapsule(
+    sim,
+    R,
+    PLAYER_START.x,
+    PLAYER_START.y,
+    PLAYER_HALF_HEIGHT,
+    PLAYER_RADIUS,
+    PLAYER_MASS,
+    PLAYER_DAMPING,
+    tags,
+    'player',
   );
-  const playerCollider = sim.world.createCollider(
-    R.ColliderDesc.capsule(PLAYER_HALF_HEIGHT, PLAYER_RADIUS).setMass(PLAYER_MASS),
-    player,
-  );
-  tags.set(playerCollider.handle, 'player');
+  const playerBody = player.body;
+  const playerCollider = player.collider;
 
   let tick = 0;
   let finished = false;
@@ -132,37 +139,30 @@ export function createHooklineSimulation(context: SimulationContext): Simulation
 
   function tryAttach(): void {
     if (rope) return;
-    const origin = player.translation();
+    const origin = playerBody.translation();
     const dir = aimVector(aim);
-    const len = hypot(dir.x, dir.y);
-    if (len === 0) return;
-    const ray = new R.Ray({ x: origin.x, y: origin.y }, { x: dir.x / len, y: dir.y / len });
-    const hit = sim.world.castRay(
-      ray,
+    const hit = castTaggedRay(
+      sim.world,
+      R,
+      origin,
+      dir,
       ATTACH_RANGE,
-      true,
-      R.QueryFilterFlags.EXCLUDE_SENSORS,
-      0xffffffff,
       playerCollider,
-      player,
-      (collider) => tags.get(collider.handle) === 'anchor',
+      playerBody,
+      tags,
+      'anchor',
     );
-    if (!hit || tags.get(hit.collider.handle) !== 'anchor') return;
+    if (!hit) return;
     const parent = hit.collider.parent();
     if (!parent) return;
     const anchorPos = parent.translation();
     const distance = hypot(origin.x - anchorPos.x, origin.y - anchorPos.y);
     const rest = clampRestLength(distance);
-    rope = sim.world.createImpulseJoint(
-      R.JointData.rope(rest, { x: 0, y: 0 }, { x: 0, y: 0 }),
-      player,
-      parent,
-      true,
-    );
+    rope = createRopeJoint(sim.world, R, playerBody, parent, rest);
     joints = 1;
     restLength = rest;
     ropeAnchor = { x: anchorPos.x, y: anchorPos.y };
-    swingMaxAbsVx = abs(player.linvel().x);
+    swingMaxAbsVx = abs(playerBody.linvel().x);
   }
 
   function release(): void {
@@ -171,12 +171,12 @@ export function createHooklineSimulation(context: SimulationContext): Simulation
       ropeAnchor = null;
       return;
     }
-    const absVx = abs(player.linvel().x);
+    const absVx = abs(playerBody.linvel().x);
     if (isPerfectRelease(absVx, swingMaxAbsVx)) {
       pushEvent(events, tick, 'perfect-release', 200, comboHundredths(combo.streak));
       notePerfect(combo, tick);
     }
-    sim.world.removeImpulseJoint(rope, true);
+    destroyImpulseJoint(sim.world, rope);
     rope = undefined;
     joints = 0;
     restLength = null;
@@ -221,8 +221,8 @@ export function createHooklineSimulation(context: SimulationContext): Simulation
       }
       sim.step();
       tick += 1;
-      const pos = player.translation();
-      const vel = player.linvel();
+      const pos = playerBody.translation();
+      const vel = playerBody.linvel();
       if (rope) {
         const ax = abs(vel.x);
         if (ax > swingMaxAbsVx) swingMaxAbsVx = ax;
@@ -271,8 +271,8 @@ export function createHooklineSimulation(context: SimulationContext): Simulation
       return sim.stateHash();
     },
     renderState() {
-      const pos = player.translation();
-      const vel = player.linvel();
+      const pos = playerBody.translation();
+      const vel = playerBody.linvel();
       return {
         playerX: pos.x,
         playerY: pos.y,

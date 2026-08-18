@@ -1,5 +1,5 @@
 {
-  "name": "@stickworld/game-host",
+  "name": "@stickworld/physics-kit",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -15,10 +15,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@stickworld/input": "workspace:*",
-    "@stickworld/replay": "workspace:*",
-    "@stickworld/sim-core": "workspace:*",
-    "@stickworld/telemetry": "workspace:*"
+    "@stickworld/sim-core": "workspace:*"
   },
   "devDependencies": {
     "@stickworld/config-ts": "workspace:*",

@@ -13,6 +13,8 @@ import {
   type Simulation,
   type StickworldGame,
 } from '@stickworld/sim-core';
+import { shouldRecordChange } from '@stickworld/input';
+import { emit } from '@stickworld/telemetry';
 import { bytesToBase64, hexPrefix, packGameVersionString, uuidToBytes } from './bytes.js';
 import { createRankedClient, type RankedClient } from './ranked-client.js';
 import type { GameView, HostPhase, PlayMode, RankedSession } from './types.js';
@@ -120,6 +122,11 @@ export class GameHost {
     this.setPhase('countdown');
     this.looping = true;
     this.bindVisibility();
+    emit('host.start', {
+      gameId: this.game.manifest.id,
+      gameVersion: this.game.manifest.gameVersion,
+      mode: this.mode,
+    });
     this.queueFrame();
   }
 
@@ -133,8 +140,7 @@ export class GameHost {
 
   input(actionId: number, value: number): void {
     if (this.phase !== 'playing' || this.pausedFlag || !this.sim || !this.recorder) return;
-    if (this.lastInput.get(actionId) === value) return;
-    this.lastInput.set(actionId, value);
+    if (!shouldRecordChange(this.lastInput, actionId, value)) return;
     this.recorder.record(this.sim.tick, actionId, value);
   }
 
@@ -234,6 +240,11 @@ export class GameHost {
     if (!this.sim || !this.recorder) return;
     this.looping = false;
     this.setPhase('results');
+    emit('host.finish', {
+      gameId: this.game.manifest.id,
+      gameVersion: this.game.manifest.gameVersion,
+      mode: this.mode,
+    });
     if (this.mode !== 'ranked' || !this.session || this.finishPosted) return;
     this.finishPosted = true;
     const events: readonly InputEvent[] = this.recorder.snapshot();
