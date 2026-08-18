@@ -1,6 +1,6 @@
 # ADR-0006 — Spec 4 roster contracts
 
-**Status:** accepted 2026-08-18; executing
+**Status:** accepted 2026-08-18; implemented on `cursor/spec-4-full-depth-bda1`
 **Spec:** 4
 **Depends on:** Spec 3 merged ([PR #3](https://github.com/Nether403/Stickworld-Tournament/pull/3)), Branch A (ADR-0001), ADR-0005
 

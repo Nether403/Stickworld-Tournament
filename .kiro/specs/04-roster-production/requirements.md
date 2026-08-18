@@ -1,6 +1,6 @@
 # Spec 4 — Roster Production (games 3–10)
 
-**Status:** approved 2026-08-18; executing. Do not start Spec 5 until exit criteria have executed-command evidence.
+**Status:** approved 2026-08-18; executed (Waves A–D on `cursor/spec-4-full-depth-bda1`). Do not start Spec 5 until this PR merges and Spec 5 is separately approved.
 **Depth:** complete (design.md + tasks.md match Spec 1/2/3 style)
 **Covers:** Plan tasks 15–18
 **Depends on:** Spec 3 merged (PR #3); Branch A (ADR-0001)
@@ -172,19 +172,19 @@ and those disagree, the game doc wins.
 
 ## Definition of done
 
-- [ ] Wave A: three games live, each with a board; best-of fixtures are one
+- [x] Wave A: three games live, each with a board; best-of fixtures are one
       replay; tiny replay assertions green; Archery ragdoll extracted without
       changing its freeze hashes
-- [ ] Wave B: Pogo generator fixture (geometry + hash) agrees in four runtimes;
+- [x] Wave B: Pogo generator fixture (geometry + hash) agrees in four runtimes;
       weekly issue works; championship ignores weekly rows
-- [ ] Wave C: three games live; 40 KB replay fixtures asserted before views;
+- [x] Wave C: three games live; 40 KB replay fixtures asserted before views;
       kinematic controller / wheels / cargo condition in the kit
-- [ ] Wave D: Demolition caps enforced; max-body four-runtime fixture green
+- [x] Wave D: Demolition caps enforced; max-body four-runtime fixture green
       **or** the game is cut and championship is nine columns
-- [ ] Every new game passed the Spec 3 checklist as a merge gate
-- [ ] Championship table has a column per shipping ranked game
-- [ ] Inspiration ledgers present for games 3–10
-- [ ] No new cloud vendor; pins unchanged
+- [x] Every new game passed the Spec 3 checklist as a merge gate
+- [x] Championship table has a column per shipping ranked game
+- [x] Inspiration ledgers present for games 3–10
+- [x] No new cloud vendor; pins unchanged
 
 ---
 

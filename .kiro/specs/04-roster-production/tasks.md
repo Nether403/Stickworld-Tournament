@@ -1,7 +1,7 @@
 # Spec 4 — Tasks
 
-**Status:** approved 2026-08-18; executing. Spec 3 is merged (PR #3).
-Do not start Spec 5 until Spec 4's exit criteria have executed-command evidence.
+**Status:** approved 2026-08-18; executed. Spec 3 is merged (PR #3).
+Do not start Spec 5 until this PR merges and Spec 5 is separately approved.
 
 Legend: `[ ]` not started · `[~]` in progress · `[x]` done
 Geometry and score numbers: `docs/games/*.md` win if this file and those disagree.
@@ -118,6 +118,14 @@ hashes; tiny replay; lazy-load; legal grep.
 
 ## Exit criteria
 
-All of `requirements.md` Definition of done, with executed-command evidence.
+All of `requirements.md` Definition of done, with executed-command evidence:
+
+- [x] `pnpm lint` + `pnpm typecheck` (46/46) + `pnpm test` (197 passed, 20 skipped)
+- [x] `node scripts/check-game-integration.mjs` + `node scripts/check-forbidden-names.mjs`
+- [x] `pnpm replay:verify games/*/fixtures/sample.swr` — all ten goldens match, Pickaxe still `6b03896db5837763`
+- [x] `pnpm --filter @stickworld/physics-kit score:browser` — max-body 28, 3/3 browsers
+- [x] `pnpm --filter @stickworld/game-demolition-dive score:browser` — 3/3, score 528 / `7a45fea1ee107627`
+- [x] `pnpm build` + `node scripts/check-play-bundle.mjs` — gzip 572160 ≤ 683301
+- [x] `CI=true pnpm --filter @stickworld/web e2e` — 36 passed (catalogue through Demolition, lazy-load, ranked 401)
 
 **Then stop.** Spec 5 waits for approval after this spec's execution evidence.
