@@ -106,7 +106,7 @@ export class GameHost {
     if (this.disposed) throw new Error('disposed');
     let seed: Seed128 = this.practiceSeed;
     if (this.mode === 'ranked') {
-      this.session = await this.ranked.issueAttempt(this.slug, 'fixed-course');
+      this.session = await this.ranked.issueAttempt(this.slug, this.game.manifest.rankedFormat);
       seed = this.session.seed as Seed128;
     }
     const rapier = await this.initRapier();

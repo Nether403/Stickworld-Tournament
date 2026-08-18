@@ -13,6 +13,14 @@ import {
 import { testChamberGame } from '@stickworld/game-test-chamber';
 import { hooklineSprintGame } from '@stickworld/game-hookline-sprint';
 import { pickaxeAscentGame } from '@stickworld/game-pickaxe-ascent';
+import { launchLabGame } from '@stickworld/game-launch-lab';
+import { ragdollArcheryRushGame } from '@stickworld/game-ragdoll-archery-rush';
+import { hammerThrowHavocGame } from '@stickworld/game-hammer-throw-havoc';
+import { pogoTowerGame } from '@stickworld/game-pogo-tower';
+import { rooftopRelayGame } from '@stickworld/game-rooftop-relay';
+import { balanceBikeBlitzGame } from '@stickworld/game-balance-bike-blitz';
+import { cargoChaosGame } from '@stickworld/game-cargo-chaos';
+import { demolitionDiveGame } from '@stickworld/game-demolition-dive';
 import { decodeReplay, packGameVersion, type ReplayHeader } from '@stickworld/replay';
 import {
   BudgetExceededError,
@@ -34,6 +42,14 @@ const GAMES = new Map<number, StickworldGame>([
   [0, testChamberGame],
   [1, hooklineSprintGame],
   [2, pickaxeAscentGame],
+  [3, launchLabGame],
+  [4, ragdollArcheryRushGame],
+  [5, hammerThrowHavocGame],
+  [6, pogoTowerGame],
+  [7, rooftopRelayGame],
+  [8, balanceBikeBlitzGame],
+  [9, cargoChaosGame],
+  [10, demolitionDiveGame],
 ]);
 
 function hexPrefix(hex: string): Buffer {

@@ -20,7 +20,7 @@ export { httpStatus, publicMessage, type ReasonCode } from './reason-codes.js';
 export { upsertProfile, requireRankedUser, claimHandle } from './profiles.js';
 export { issueAttempt, type IssueResult } from './attempts.js';
 export { finishAttempt } from './finish.js';
-export { rotateDaily } from './daily.js';
+export { rotateDaily, isoWeekMonday } from './daily.js';
 export {
   closeSeason,
   readLeaderboard,

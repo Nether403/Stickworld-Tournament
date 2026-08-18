@@ -12,16 +12,21 @@ recorded inputs.
 - [`docs/adr/0001-determinism-fork.md`](docs/adr/0001-determinism-fork.md) — Branch A
 - [`docs/adr/0004-spec2-platform-stack.md`](docs/adr/0004-spec2-platform-stack.md) — Neon + Next + Drizzle
 
-## Spec 3 (this branch)
+## Spec 3 (merged)
 
-Game production kit, Hookline Sprint, Pickaxe Ascent. Full-depth design at
+Game production kit, Hookline Sprint, Pickaxe Ascent.
 [`.kiro/specs/03-game-production-kit/`](.kiro/specs/03-game-production-kit/).
-Approved and executed 2026-08-18. Presentation decisions:
-[`docs/adr/0005-spec3-game-host-and-auth.md`](docs/adr/0005-spec3-game-host-and-auth.md).
-Ragdoll is not in this spec — see ADR-0005.
+Decisions: [`docs/adr/0005-spec3-game-host-and-auth.md`](docs/adr/0005-spec3-game-host-and-auth.md).
 
 Frozen v1 game contracts: [`docs/games/hookline-sprint.md`](docs/games/hookline-sprint.md),
 [`docs/games/pickaxe-ascent.md`](docs/games/pickaxe-ascent.md).
+
+## Spec 4 (approved 2026-08-18; executing)
+
+Roster games 3–10. Decisions locked in ADR-0006. Do not start Spec 5 until
+this spec’s exit criteria have executed-command evidence.
+[`.kiro/specs/04-roster-production/`](.kiro/specs/04-roster-production/).
+Decisions: [`docs/adr/0006-spec4-roster-contracts.md`](docs/adr/0006-spec4-roster-contracts.md).
 
 ## Setup
 
@@ -52,6 +57,7 @@ pnpm build
 pnpm replay:verify packages/game-test-chamber/fixtures/sample.swr
 pnpm replay:verify games/hookline-sprint/fixtures/sample.swr
 pnpm replay:verify games/pickaxe-ascent/fixtures/sample.swr
+pnpm replay:verify games/launch-lab/fixtures/sample.swr
 ```
 
 Test Chamber (the permanent contract game) is `@stickworld/game-test-chamber`.

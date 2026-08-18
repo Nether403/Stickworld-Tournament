@@ -23,7 +23,7 @@ export interface RankedSession {
 }
 
 export interface IssueAttemptBody {
-  seedPolicy?: 'fixed-course' | 'daily-seed';
+  seedPolicy?: 'fixed-course' | 'daily-seed' | 'weekly-seed';
 }
 
 export interface FinishAttemptBody {

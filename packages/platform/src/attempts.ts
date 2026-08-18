@@ -22,11 +22,12 @@ import {
 } from './limits.js';
 import { floorWindow, hitRateLimit } from './rate-limit.js';
 import { isDegenerateSeed, packSeed, seedFromBytes, unpackSeed, type Seed128 } from './seed128.js';
+import { isoWeekMonday } from './daily.js';
 
 export interface IssueInput {
   userId: string;
   gameSlug: string;
-  seedPolicy: 'fixed-course' | 'daily-seed';
+  seedPolicy: 'fixed-course' | 'daily-seed' | 'weekly-seed';
   ip: string;
 }
 
@@ -116,8 +117,8 @@ export async function issueAttempt(
     if (remaining <= 0) throw new ApiError('DAILY_CAP');
 
     let seed: Seed128;
-    if (input.seedPolicy === 'daily-seed') {
-      const utc = now.toISOString().slice(0, 10);
+    if (input.seedPolicy === 'daily-seed' || input.seedPolicy === 'weekly-seed') {
+      const utc = input.seedPolicy === 'weekly-seed' ? isoWeekMonday(now) : now.toISOString().slice(0, 10);
       const board = await db
         .select()
         .from(dailyBoards)

@@ -48,6 +48,13 @@ export function progressDelta(prevDecimetres: number, maxX: number): number {
   return next > prevDecimetres ? next - prevDecimetres : 0;
 }
 
+/** Integer sum of best-of sub-attempt scores. Do not average. */
+export function sumSubAttempts(scores: readonly number[]): number {
+  let total = 0;
+  for (const score of scores) total += score;
+  return total;
+}
+
 export function firstPlaneCrossed(
   prev: number,
   next: number,

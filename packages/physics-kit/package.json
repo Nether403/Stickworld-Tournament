@@ -12,13 +12,17 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "score:bundle": "esbuild conformance/runner-browser.ts --bundle --format=iife --outfile=conformance/page/harness.js --alias:@stickworld/sim-core=../sim-core/src/index.ts",
+    "score:browser": "pnpm score:bundle && playwright test --config playwright.config.ts"
   },
   "dependencies": {
     "@stickworld/sim-core": "workspace:*"
   },
   "devDependencies": {
+    "@playwright/test": "1.62.1",
     "@stickworld/config-ts": "workspace:*",
+    "esbuild": "0.28.2",
     "typescript": "5.9.3",
     "vitest": "3.2.7"
   }

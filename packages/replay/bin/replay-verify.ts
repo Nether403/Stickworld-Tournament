@@ -37,6 +37,78 @@ async function loadGame(registryId: number): Promise<StickworldGame | undefined>
       return undefined;
     }
   }
+  if (registryId === 3) {
+    const url = new URL('../../../../games/launch-lab/dist/index.js', import.meta.url);
+    try {
+      const mod = (await import(url.href)) as { launchLabGame: StickworldGame };
+      return mod.launchLabGame;
+    } catch {
+      return undefined;
+    }
+  }
+  if (registryId === 4) {
+    const url = new URL('../../../../games/ragdoll-archery-rush/dist/index.js', import.meta.url);
+    try {
+      const mod = (await import(url.href)) as { ragdollArcheryRushGame: StickworldGame };
+      return mod.ragdollArcheryRushGame;
+    } catch {
+      return undefined;
+    }
+  }
+  if (registryId === 5) {
+    const url = new URL('../../../../games/hammer-throw-havoc/dist/index.js', import.meta.url);
+    try {
+      const mod = (await import(url.href)) as { hammerThrowHavocGame: StickworldGame };
+      return mod.hammerThrowHavocGame;
+    } catch {
+      return undefined;
+    }
+  }
+  if (registryId === 6) {
+    const url = new URL('../../../../games/pogo-tower/dist/index.js', import.meta.url);
+    try {
+      const mod = (await import(url.href)) as { pogoTowerGame: StickworldGame };
+      return mod.pogoTowerGame;
+    } catch {
+      return undefined;
+    }
+  }
+  if (registryId === 7) {
+    const url = new URL('../../../../games/rooftop-relay/dist/index.js', import.meta.url);
+    try {
+      const mod = (await import(url.href)) as { rooftopRelayGame: StickworldGame };
+      return mod.rooftopRelayGame;
+    } catch {
+      return undefined;
+    }
+  }
+  if (registryId === 8) {
+    const url = new URL('../../../../games/balance-bike-blitz/dist/index.js', import.meta.url);
+    try {
+      const mod = (await import(url.href)) as { balanceBikeBlitzGame: StickworldGame };
+      return mod.balanceBikeBlitzGame;
+    } catch {
+      return undefined;
+    }
+  }
+  if (registryId === 9) {
+    const url = new URL('../../../../games/cargo-chaos/dist/index.js', import.meta.url);
+    try {
+      const mod = (await import(url.href)) as { cargoChaosGame: StickworldGame };
+      return mod.cargoChaosGame;
+    } catch {
+      return undefined;
+    }
+  }
+  if (registryId === 10) {
+    const url = new URL('../../../../games/demolition-dive/dist/index.js', import.meta.url);
+    try {
+      const mod = (await import(url.href)) as { demolitionDiveGame: StickworldGame };
+      return mod.demolitionDiveGame;
+    } catch {
+      return undefined;
+    }
+  }
   return undefined;
 }
 

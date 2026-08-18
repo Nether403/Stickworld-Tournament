@@ -16,9 +16,27 @@ Task 2 must not regenerate those files.
 - Rope / distance impulse joint
 - Kinematic cuboid + `setKinematicAngle` (added for Pickaxe Ascent; not used by Hookline)
 
-## Not in Spec 3
+## Spec 4 Wave A
 
-**Ragdoll is not implemented.** Hookline Sprint and Pickaxe Ascent v1 use a locked-rotation
-capsule (Pickaxe adds a kinematic pickaxe body). A ten-body stickman assembly waits for the
-first game that simulates one (Spec 4). Wheels, breakables, and moving platforms are also
-out of this package until a game proves them.
+- `launchImpulse(body, dir, speed)` — set linvel to unit direction × speed (impulse-from-rest)
+- `resetDynamicPose` — best-of pose reset without new bodies
+- Planted / dynamic capsules, dynamic cuboid, revolute + fixed joints
+- `createTenBodyRagdoll` — extracted from Ragdoll Archery Rush after goldens (`370da3b8b548c5f8`)
+
+## Spec 4 Wave B
+
+- `movingPlatformX` / `stepMovingPlatform` — Pogo Tower kinematic movers (`detmath.sin`)
+- Pickaxe v1 must not consume movers (hash stays `6b03896db5837763`)
+
+## Spec 4 Wave C
+
+- `createKinematicCharacter` / `stepCharacterController` / `setCuboidHalfExtents` — Rooftop Relay
+- `createWheelAssembly` (spring rest 0.32 m; prismatic would lock wheel spin) — Balance Bike
+- `createCargoCondition` integer 0–100 — Cargo Chaos
+
+## Spec 4 Wave D
+
+- `createBreakableCuboid` / `fractureBreakable` / `parkDespawn` / `restoreBreakable`
+- `propagateFractures` — same-tick chain, depth cap 3, index order
+- `runMaxBodyBreakableFixture` — 28 bodies, four-runtime hashes before Phaser
+- Rapier stays `0.20.0` `-compat`. Never `destroyRigidBody`.

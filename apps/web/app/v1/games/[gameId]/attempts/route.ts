@@ -8,7 +8,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ gameId: string
     const db = getDb();
     const user = await requireRankedUser(db, authId);
     const { gameId } = await ctx.params;
-    const body = (await req.json().catch(() => ({}))) as { seedPolicy?: 'fixed-course' | 'daily-seed' };
+    const body = (await req.json().catch(() => ({}))) as {
+      seedPolicy?: 'fixed-course' | 'daily-seed' | 'weekly-seed';
+    };
     const result = await issueAttempt(db, platformContext(), {
       userId: user.userId,
       gameSlug: gameId,

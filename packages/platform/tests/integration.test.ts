@@ -455,6 +455,41 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
     expect(JSON.stringify(afterSnap?.payload ?? null)).toBe(beforeBytes);
   });
 
+  it('keeps weekly verified runs off the championship snapshot', async () => {
+    const { season, sg, weeklySg } = await createIsolatedSeason(db, `iso-w-${randomUUID().slice(0, 8)}`);
+    const profile = await upsertProfile(db, `auth-${randomUUID()}`);
+    await insertVerifiedBest(db, profile.userId, sg.id, 100n);
+    await recomputeSeason(db, c.clock, season.id, { force: true });
+    const beforeSnap = await db
+      .select()
+      .from(rankingSnapshots)
+      .where(
+        and(
+          eq(rankingSnapshots.seasonId, season.id),
+          eq(rankingSnapshots.scope, 'championship'),
+          eq(rankingSnapshots.frozen, false),
+        ),
+      )
+      .then((r) => r[0]);
+    const beforeBytes = JSON.stringify(beforeSnap?.payload ?? null);
+
+    const weeklyUser = await upsertProfile(db, `auth-${randomUUID()}`);
+    await insertVerifiedBest(db, weeklyUser.userId, weeklySg.id, 999n);
+    await recomputeSeason(db, c.clock, season.id, { force: true });
+    const afterSnap = await db
+      .select()
+      .from(rankingSnapshots)
+      .where(
+        and(
+          eq(rankingSnapshots.seasonId, season.id),
+          eq(rankingSnapshots.scope, 'championship'),
+          eq(rankingSnapshots.frozen, false),
+        ),
+      )
+      .then((r) => r[0]);
+    expect(JSON.stringify(afterSnap?.payload ?? null)).toBe(beforeBytes);
+  });
+
   it('builds championship points at the 50-entrant gate, churns the tail, and freezes on close', async () => {
     const { season, sg } = await createIsolatedSeason(db, `gate-${randomUUID().slice(0, 8)}`);
     const userIds: string[] = [];
@@ -560,6 +595,35 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
         ip: '11.0.0.9',
       }),
     ).rejects.toMatchObject({ code: 'DAILY_CAP' });
+  });
+
+  it('rotates weekly boards onto ISO-week Monday and issues that seed', async () => {
+    const tuesday = new Date('2026-08-18T12:00:00.000Z');
+    await rotateDaily(db, { randomBytes: (n) => randomBytes(n) }, tuesday);
+    const weeklySg = await db
+      .select({ id: seasonGames.id })
+      .from(seasonGames)
+      .innerJoin(games, eq(games.id, seasonGames.gameId))
+      .where(and(eq(games.slug, 'test-chamber'), eq(seasonGames.seedPolicy, 'weekly-seed')))
+      .then((r) => r[0]);
+    expect(weeklySg).toBeTruthy();
+    const mondayBoard = await db
+      .select()
+      .from(dailyBoards)
+      .where(and(eq(dailyBoards.seasonGameId, weeklySg!.id), eq(dailyBoards.utcDate, '2026-08-17')))
+      .then((r) => r[0]);
+    expect(mondayBoard).toBeTruthy();
+    expect(mondayBoard?.archivedAt).toBeNull();
+
+    const profile = await upsertProfile(db, `auth-${randomUUID()}`);
+    await claimHandle(db, { now: () => tuesday }, profile.userId, `w${randomUUID().slice(0, 8)}`);
+    const issued = await issueAttempt(db, ctx({ clock: { now: () => tuesday } }), {
+      userId: profile.userId,
+      gameSlug: 'test-chamber',
+      seedPolicy: 'weekly-seed',
+      ip: '12.0.0.1',
+    });
+    expect(issued.seed).toEqual([...unpackSeed(mondayBoard!.seed)]);
   });
 
   it('verifies the Hookline Sprint golden replay', async () => {
@@ -718,6 +782,7 @@ async function createIsolatedSeason(
   season: typeof seasons.$inferSelect;
   sg: typeof seasonGames.$inferSelect;
   dailySg: typeof seasonGames.$inferSelect;
+  weeklySg: typeof seasonGames.$inferSelect;
 }> {
   const [season] = await db
     .insert(seasons)
@@ -757,7 +822,18 @@ async function createIsolatedSeason(
       activeTo: new Date('2099-01-01T00:00:00.000Z'),
     })
     .returning();
-  return { season: season!, sg: sg!, dailySg: dailySg! };
+  const [weeklySg] = await db
+    .insert(seasonGames)
+    .values({
+      seasonId: season!.id,
+      gameId: game!.id,
+      gameVersionId: version!.id,
+      seedPolicy: 'weekly-seed',
+      activeFrom: new Date('2020-01-01T00:00:00.000Z'),
+      activeTo: new Date('2099-01-01T00:00:00.000Z'),
+    })
+    .returning();
+  return { season: season!, sg: sg!, dailySg: dailySg!, weeklySg: weeklySg! };
 }
 
 async function insertVerifiedBest(

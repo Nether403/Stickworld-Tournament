@@ -53,15 +53,39 @@ importers:
       '@stickworld/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@stickworld/game-balance-bike-blitz':
+        specifier: workspace:*
+        version: link:../../games/balance-bike-blitz
+      '@stickworld/game-cargo-chaos':
+        specifier: workspace:*
+        version: link:../../games/cargo-chaos
+      '@stickworld/game-demolition-dive':
+        specifier: workspace:*
+        version: link:../../games/demolition-dive
+      '@stickworld/game-hammer-throw-havoc':
+        specifier: workspace:*
+        version: link:../../games/hammer-throw-havoc
       '@stickworld/game-hookline-sprint':
         specifier: workspace:*
         version: link:../../games/hookline-sprint
       '@stickworld/game-host':
         specifier: workspace:*
         version: link:../../packages/game-host
+      '@stickworld/game-launch-lab':
+        specifier: workspace:*
+        version: link:../../games/launch-lab
       '@stickworld/game-pickaxe-ascent':
         specifier: workspace:*
         version: link:../../games/pickaxe-ascent
+      '@stickworld/game-pogo-tower':
+        specifier: workspace:*
+        version: link:../../games/pogo-tower
+      '@stickworld/game-ragdoll-archery-rush':
+        specifier: workspace:*
+        version: link:../../games/ragdoll-archery-rush
+      '@stickworld/game-rooftop-relay':
+        specifier: workspace:*
+        version: link:../../games/rooftop-relay
       '@stickworld/platform':
         specifier: workspace:*
         version: link:../../packages/platform
@@ -114,12 +138,36 @@ importers:
       '@stickworld/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@stickworld/game-balance-bike-blitz':
+        specifier: workspace:*
+        version: link:../../games/balance-bike-blitz
+      '@stickworld/game-cargo-chaos':
+        specifier: workspace:*
+        version: link:../../games/cargo-chaos
+      '@stickworld/game-demolition-dive':
+        specifier: workspace:*
+        version: link:../../games/demolition-dive
+      '@stickworld/game-hammer-throw-havoc':
+        specifier: workspace:*
+        version: link:../../games/hammer-throw-havoc
       '@stickworld/game-hookline-sprint':
         specifier: workspace:*
         version: link:../../games/hookline-sprint
+      '@stickworld/game-launch-lab':
+        specifier: workspace:*
+        version: link:../../games/launch-lab
       '@stickworld/game-pickaxe-ascent':
         specifier: workspace:*
         version: link:../../games/pickaxe-ascent
+      '@stickworld/game-pogo-tower':
+        specifier: workspace:*
+        version: link:../../games/pogo-tower
+      '@stickworld/game-ragdoll-archery-rush':
+        specifier: workspace:*
+        version: link:../../games/ragdoll-archery-rush
+      '@stickworld/game-rooftop-relay':
+        specifier: workspace:*
+        version: link:../../games/rooftop-relay
       '@stickworld/platform':
         specifier: workspace:*
         version: link:../../packages/platform
@@ -133,6 +181,178 @@ importers:
       '@types/node':
         specifier: 22.19.21
         version: 22.19.21
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 3.2.7
+        version: 3.2.7(@types/node@22.19.21)(tsx@4.23.12)
+
+  games/balance-bike-blitz:
+    dependencies:
+      '@stickworld/game-host':
+        specifier: workspace:*
+        version: link:../../packages/game-host
+      '@stickworld/input':
+        specifier: workspace:*
+        version: link:../../packages/input
+      '@stickworld/physics-kit':
+        specifier: workspace:*
+        version: link:../../packages/physics-kit
+      '@stickworld/replay':
+        specifier: workspace:*
+        version: link:../../packages/replay
+      '@stickworld/scoring':
+        specifier: workspace:*
+        version: link:../../packages/scoring
+      '@stickworld/sim-core':
+        specifier: workspace:*
+        version: link:../../packages/sim-core
+      phaser:
+        specifier: 4.2.1
+        version: 4.2.1
+    devDependencies:
+      '@playwright/test':
+        specifier: 1.62.1
+        version: 1.62.1
+      '@stickworld/config-ts':
+        specifier: workspace:*
+        version: link:../../packages/config-ts
+      '@stickworld/game-test-chamber':
+        specifier: workspace:*
+        version: link:../../packages/game-test-chamber
+      esbuild:
+        specifier: 0.28.2
+        version: 0.28.2
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 3.2.7
+        version: 3.2.7(@types/node@22.19.21)(tsx@4.23.12)
+
+  games/cargo-chaos:
+    dependencies:
+      '@stickworld/game-host':
+        specifier: workspace:*
+        version: link:../../packages/game-host
+      '@stickworld/input':
+        specifier: workspace:*
+        version: link:../../packages/input
+      '@stickworld/physics-kit':
+        specifier: workspace:*
+        version: link:../../packages/physics-kit
+      '@stickworld/replay':
+        specifier: workspace:*
+        version: link:../../packages/replay
+      '@stickworld/scoring':
+        specifier: workspace:*
+        version: link:../../packages/scoring
+      '@stickworld/sim-core':
+        specifier: workspace:*
+        version: link:../../packages/sim-core
+      phaser:
+        specifier: 4.2.1
+        version: 4.2.1
+    devDependencies:
+      '@playwright/test':
+        specifier: 1.62.1
+        version: 1.62.1
+      '@stickworld/config-ts':
+        specifier: workspace:*
+        version: link:../../packages/config-ts
+      '@stickworld/game-test-chamber':
+        specifier: workspace:*
+        version: link:../../packages/game-test-chamber
+      esbuild:
+        specifier: 0.28.2
+        version: 0.28.2
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 3.2.7
+        version: 3.2.7(@types/node@22.19.21)(tsx@4.23.12)
+
+  games/demolition-dive:
+    dependencies:
+      '@stickworld/game-host':
+        specifier: workspace:*
+        version: link:../../packages/game-host
+      '@stickworld/input':
+        specifier: workspace:*
+        version: link:../../packages/input
+      '@stickworld/physics-kit':
+        specifier: workspace:*
+        version: link:../../packages/physics-kit
+      '@stickworld/replay':
+        specifier: workspace:*
+        version: link:../../packages/replay
+      '@stickworld/scoring':
+        specifier: workspace:*
+        version: link:../../packages/scoring
+      '@stickworld/sim-core':
+        specifier: workspace:*
+        version: link:../../packages/sim-core
+      phaser:
+        specifier: 4.2.1
+        version: 4.2.1
+    devDependencies:
+      '@playwright/test':
+        specifier: 1.62.1
+        version: 1.62.1
+      '@stickworld/config-ts':
+        specifier: workspace:*
+        version: link:../../packages/config-ts
+      '@stickworld/game-test-chamber':
+        specifier: workspace:*
+        version: link:../../packages/game-test-chamber
+      esbuild:
+        specifier: 0.28.2
+        version: 0.28.2
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 3.2.7
+        version: 3.2.7(@types/node@22.19.21)(tsx@4.23.12)
+
+  games/hammer-throw-havoc:
+    dependencies:
+      '@stickworld/game-host':
+        specifier: workspace:*
+        version: link:../../packages/game-host
+      '@stickworld/input':
+        specifier: workspace:*
+        version: link:../../packages/input
+      '@stickworld/physics-kit':
+        specifier: workspace:*
+        version: link:../../packages/physics-kit
+      '@stickworld/replay':
+        specifier: workspace:*
+        version: link:../../packages/replay
+      '@stickworld/scoring':
+        specifier: workspace:*
+        version: link:../../packages/scoring
+      '@stickworld/sim-core':
+        specifier: workspace:*
+        version: link:../../packages/sim-core
+      phaser:
+        specifier: 4.2.1
+        version: 4.2.1
+    devDependencies:
+      '@playwright/test':
+        specifier: 1.62.1
+        version: 1.62.1
+      '@stickworld/config-ts':
+        specifier: workspace:*
+        version: link:../../packages/config-ts
+      '@stickworld/game-test-chamber':
+        specifier: workspace:*
+        version: link:../../packages/game-test-chamber
+      esbuild:
+        specifier: 0.28.2
+        version: 0.28.2
       typescript:
         specifier: 5.9.3
         version: 5.9.3
@@ -183,7 +403,179 @@ importers:
         specifier: 3.2.7
         version: 3.2.7(@types/node@22.19.21)(tsx@4.23.12)
 
+  games/launch-lab:
+    dependencies:
+      '@stickworld/game-host':
+        specifier: workspace:*
+        version: link:../../packages/game-host
+      '@stickworld/input':
+        specifier: workspace:*
+        version: link:../../packages/input
+      '@stickworld/physics-kit':
+        specifier: workspace:*
+        version: link:../../packages/physics-kit
+      '@stickworld/replay':
+        specifier: workspace:*
+        version: link:../../packages/replay
+      '@stickworld/scoring':
+        specifier: workspace:*
+        version: link:../../packages/scoring
+      '@stickworld/sim-core':
+        specifier: workspace:*
+        version: link:../../packages/sim-core
+      phaser:
+        specifier: 4.2.1
+        version: 4.2.1
+    devDependencies:
+      '@playwright/test':
+        specifier: 1.62.1
+        version: 1.62.1
+      '@stickworld/config-ts':
+        specifier: workspace:*
+        version: link:../../packages/config-ts
+      '@stickworld/game-test-chamber':
+        specifier: workspace:*
+        version: link:../../packages/game-test-chamber
+      esbuild:
+        specifier: 0.28.2
+        version: 0.28.2
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 3.2.7
+        version: 3.2.7(@types/node@22.19.21)(tsx@4.23.12)
+
   games/pickaxe-ascent:
+    dependencies:
+      '@stickworld/game-host':
+        specifier: workspace:*
+        version: link:../../packages/game-host
+      '@stickworld/input':
+        specifier: workspace:*
+        version: link:../../packages/input
+      '@stickworld/physics-kit':
+        specifier: workspace:*
+        version: link:../../packages/physics-kit
+      '@stickworld/replay':
+        specifier: workspace:*
+        version: link:../../packages/replay
+      '@stickworld/scoring':
+        specifier: workspace:*
+        version: link:../../packages/scoring
+      '@stickworld/sim-core':
+        specifier: workspace:*
+        version: link:../../packages/sim-core
+      phaser:
+        specifier: 4.2.1
+        version: 4.2.1
+    devDependencies:
+      '@playwright/test':
+        specifier: 1.62.1
+        version: 1.62.1
+      '@stickworld/config-ts':
+        specifier: workspace:*
+        version: link:../../packages/config-ts
+      '@stickworld/game-test-chamber':
+        specifier: workspace:*
+        version: link:../../packages/game-test-chamber
+      esbuild:
+        specifier: 0.28.2
+        version: 0.28.2
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 3.2.7
+        version: 3.2.7(@types/node@22.19.21)(tsx@4.23.12)
+
+  games/pogo-tower:
+    dependencies:
+      '@stickworld/game-host':
+        specifier: workspace:*
+        version: link:../../packages/game-host
+      '@stickworld/input':
+        specifier: workspace:*
+        version: link:../../packages/input
+      '@stickworld/physics-kit':
+        specifier: workspace:*
+        version: link:../../packages/physics-kit
+      '@stickworld/replay':
+        specifier: workspace:*
+        version: link:../../packages/replay
+      '@stickworld/scoring':
+        specifier: workspace:*
+        version: link:../../packages/scoring
+      '@stickworld/sim-core':
+        specifier: workspace:*
+        version: link:../../packages/sim-core
+      phaser:
+        specifier: 4.2.1
+        version: 4.2.1
+    devDependencies:
+      '@playwright/test':
+        specifier: 1.62.1
+        version: 1.62.1
+      '@stickworld/config-ts':
+        specifier: workspace:*
+        version: link:../../packages/config-ts
+      '@stickworld/game-test-chamber':
+        specifier: workspace:*
+        version: link:../../packages/game-test-chamber
+      esbuild:
+        specifier: 0.28.2
+        version: 0.28.2
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 3.2.7
+        version: 3.2.7(@types/node@22.19.21)(tsx@4.23.12)
+
+  games/ragdoll-archery-rush:
+    dependencies:
+      '@stickworld/game-host':
+        specifier: workspace:*
+        version: link:../../packages/game-host
+      '@stickworld/input':
+        specifier: workspace:*
+        version: link:../../packages/input
+      '@stickworld/physics-kit':
+        specifier: workspace:*
+        version: link:../../packages/physics-kit
+      '@stickworld/replay':
+        specifier: workspace:*
+        version: link:../../packages/replay
+      '@stickworld/scoring':
+        specifier: workspace:*
+        version: link:../../packages/scoring
+      '@stickworld/sim-core':
+        specifier: workspace:*
+        version: link:../../packages/sim-core
+      phaser:
+        specifier: 4.2.1
+        version: 4.2.1
+    devDependencies:
+      '@playwright/test':
+        specifier: 1.62.1
+        version: 1.62.1
+      '@stickworld/config-ts':
+        specifier: workspace:*
+        version: link:../../packages/config-ts
+      '@stickworld/game-test-chamber':
+        specifier: workspace:*
+        version: link:../../packages/game-test-chamber
+      esbuild:
+        specifier: 0.28.2
+        version: 0.28.2
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 3.2.7
+        version: 3.2.7(@types/node@22.19.21)(tsx@4.23.12)
+
+  games/rooftop-relay:
     dependencies:
       '@stickworld/game-host':
         specifier: workspace:*
@@ -352,9 +744,15 @@ importers:
         specifier: workspace:*
         version: link:../sim-core
     devDependencies:
+      '@playwright/test':
+        specifier: 1.62.1
+        version: 1.62.1
       '@stickworld/config-ts':
         specifier: workspace:*
         version: link:../config-ts
+      esbuild:
+        specifier: 0.28.2
+        version: 0.28.2
       typescript:
         specifier: 5.9.3
         version: 5.9.3
@@ -367,12 +765,36 @@ importers:
       '@stickworld/db':
         specifier: workspace:*
         version: link:../db
+      '@stickworld/game-balance-bike-blitz':
+        specifier: workspace:*
+        version: link:../../games/balance-bike-blitz
+      '@stickworld/game-cargo-chaos':
+        specifier: workspace:*
+        version: link:../../games/cargo-chaos
+      '@stickworld/game-demolition-dive':
+        specifier: workspace:*
+        version: link:../../games/demolition-dive
+      '@stickworld/game-hammer-throw-havoc':
+        specifier: workspace:*
+        version: link:../../games/hammer-throw-havoc
       '@stickworld/game-hookline-sprint':
         specifier: workspace:*
         version: link:../../games/hookline-sprint
+      '@stickworld/game-launch-lab':
+        specifier: workspace:*
+        version: link:../../games/launch-lab
       '@stickworld/game-pickaxe-ascent':
         specifier: workspace:*
         version: link:../../games/pickaxe-ascent
+      '@stickworld/game-pogo-tower':
+        specifier: workspace:*
+        version: link:../../games/pogo-tower
+      '@stickworld/game-ragdoll-archery-rush':
+        specifier: workspace:*
+        version: link:../../games/ragdoll-archery-rush
+      '@stickworld/game-rooftop-relay':
+        specifier: workspace:*
+        version: link:../../games/rooftop-relay
       '@stickworld/game-test-chamber':
         specifier: workspace:*
         version: link:../game-test-chamber

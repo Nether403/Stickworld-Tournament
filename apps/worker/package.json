@@ -15,6 +15,14 @@
     "@stickworld/platform": "workspace:*",
     "@stickworld/game-hookline-sprint": "workspace:*",
     "@stickworld/game-pickaxe-ascent": "workspace:*",
+    "@stickworld/game-launch-lab": "workspace:*",
+    "@stickworld/game-ragdoll-archery-rush": "workspace:*",
+    "@stickworld/game-hammer-throw-havoc": "workspace:*",
+    "@stickworld/game-pogo-tower": "workspace:*",
+    "@stickworld/game-rooftop-relay": "workspace:*",
+    "@stickworld/game-balance-bike-blitz": "workspace:*",
+    "@stickworld/game-cargo-chaos": "workspace:*",
+    "@stickworld/game-demolition-dive": "workspace:*",
     "drizzle-orm": "0.45.2"
   },
   "devDependencies": {

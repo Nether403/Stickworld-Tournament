@@ -1,7 +1,7 @@
 import type { RankedSession } from './types.js';
 
 export interface RankedClient {
-  issueAttempt(slug: string, seedPolicy?: 'fixed-course' | 'daily-seed'): Promise<RankedSession>;
+  issueAttempt(slug: string, seedPolicy?: 'fixed-course' | 'daily-seed' | 'weekly-seed'): Promise<RankedSession>;
   finishAttempt(
     attemptId: string,
     body: { token: string; replay: string; claimedScore: string },

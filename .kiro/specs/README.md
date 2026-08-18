@@ -7,9 +7,9 @@ design is **approved** and every earlier spec's definition of done is green.
 |---|---|---|---|---|
 | [01](./01-simulation-replay-core/) | Deterministic Simulation and Replay Core | **full** | 1–4 | **done, merged** ([PR #1](https://github.com/Nether403/Stickworld-Tournament/pull/1)) |
 | [02](./02-tournament-platform-ranking/) | Tournament Platform and Ranking | **full** | 5–9, 11, 13 | **done, merged** ([PR #2](https://github.com/Nether403/Stickworld-Tournament/pull/2)) |
-| [03](./03-game-production-kit/) | Game Production Kit and Reference Game | **full** | 10, 12, 14 | **approved 2026-08-18**; executing |
-| [04](./04-roster-production/) | Roster Production (games 3–10) | scope | 15–18 | blocked on Spec 3 |
-| [05](./05-assets-integrity-operations-launch/) | Assets, Integrity, Operations, Launch | scope | 19–24 | blocked on Specs 1–4 |
+| [03](./03-game-production-kit/) | Game Production Kit and Reference Game | **full** | 10, 12, 14 | **done, merged** ([PR #3](https://github.com/Nether403/Stickworld-Tournament/pull/3)) |
+| [04](./04-roster-production/) | Roster Production (games 3–10) | **full** | 15–18 | **approved 2026-08-18; executing** |
+| [05](./05-assets-integrity-operations-launch/) | Assets, Integrity, Operations, Launch | scope | 19–24 | blocked on Spec 4 |
 
 Plus a non-spec parallel track: [`docs/legal/brand-and-ip-clearance.md`](../../docs/legal/brand-and-ip-clearance.md) — started, long lead times, gates naming.
 
@@ -25,9 +25,11 @@ Spec 1 contained a determinism fork. That fork is **resolved: Branch A**. Specs 
 
 Spec 2 is full depth and executed: worker runtime, schema, and `/v1` are real.
 
-Spec 3 is now full depth because the platform contracts exist: Phaser ownership, practice vs ranked, course geometry, score events, and extraction scope can be named without writing them twice.
+Spec 3 is full depth and executed: kit, checklist, Hookline, Pickaxe, per-slug play pages.
 
-Specs 4–5 stay at scope-and-contract depth until Spec 3 lands: they depend on the kit, the checklist merge gate, and the registration seam.
+Spec 4 is now full depth because the kit and seam exist: waves, best-of-as-phases, ragdoll's first consumer, weekly-seed, and frozen `docs/games/*.md` can be named without executing them.
+
+Spec 5 stays at scope-and-contract depth until Spec 4 lands.
 
 ---
 
@@ -38,9 +40,9 @@ Spec 1  ──► Branch A, merged to main
    ▼
 Spec 2  merged to main (PR #2)
    ▼
-Spec 3  full-depth design ──► REPORT TO USER, STOP until approved ──► execute
+Spec 3  merged to main (PR #3)
    ▼
-Spec 4  revise → approve → execute
+Spec 4  approved 2026-08-18 ──► executing ──► STOP after exit evidence; Spec 5 waits
    ▼
 Spec 5  revise → approve → execute → launch
 ```

@@ -3,7 +3,10 @@ import type { Simulation, StickworldGame } from '@stickworld/sim-core';
 import { GameHost } from '../src/host.js';
 import type { GameView, HostPhase } from '../src/types.js';
 
-function fakeGame(maxTicks = 10_000): StickworldGame & { steps: () => number } {
+function fakeGame(
+  maxTicks = 10_000,
+  rankedFormat: 'fixed-course' | 'daily-seed' | 'weekly-seed' = 'fixed-course',
+): StickworldGame & { steps: () => number } {
   let steps = 0;
   const game: StickworldGame & { steps: () => number } = {
     manifest: {
@@ -12,7 +15,7 @@ function fakeGame(maxTicks = 10_000): StickworldGame & { steps: () => number } {
       gameVersion: '1.0.0',
       simulationVersion: 1,
       scoringVersion: 1,
-      rankedFormat: 'fixed-course',
+      rankedFormat,
       attemptShape: { kind: 'single' },
       maxRunTicks: maxTicks,
       tickRate: 60,
@@ -179,5 +182,35 @@ describe('GameHost', () => {
     await host.start();
     host.stop();
     expect(methods.some((line) => line.includes('/finish'))).toBe(false);
+  });
+
+  it('posts the manifest rankedFormat as seedPolicy', async () => {
+    const bodies: string[] = [];
+    const host = new GameHost({
+      game: fakeGame(10_000, 'weekly-seed'),
+      slug: 'pogo-tower',
+      mode: 'ranked',
+      view: view(),
+      scheduleFrame: () => 0,
+      cancelFrame: () => {},
+      now: () => 0,
+      initRapier: async () => ({}) as never,
+      fetchImpl: (async (_input: RequestInfo | URL, init?: RequestInit) => {
+        bodies.push(String(init?.body ?? ''));
+        return new Response(
+          JSON.stringify({
+            attemptId: '00000000-0000-0000-0000-000000000003',
+            token: 'tok',
+            seed: [5, 6, 7, 8],
+            gameVersion: '1.0.0',
+            expiresAt: '2099-01-01T00:00:00.000Z',
+          }),
+          { status: 201 },
+        );
+      }) as typeof fetch,
+    });
+    await host.start();
+    expect(bodies.some((body) => body.includes('weekly-seed'))).toBe(true);
+    host.dispose();
   });
 });
