@@ -1165,6 +1165,110 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
     }
   });
 
+  it('serializes attempt finishing with season closure', async () => {
+    const now = new Date('2026-08-18T22:45:00.000Z');
+    const suffix = randomUUID().replaceAll('-', '');
+    const [season] = await db
+      .insert(seasons)
+      .values({
+        slug: `finish-close-${suffix}`,
+        startsAt: new Date('2020-01-01T00:00:00.000Z'),
+        endsAt: new Date('2099-01-01T00:00:00.000Z'),
+        status: 'active',
+        rulesVersion: 1,
+      })
+      .returning();
+    const gameSlug = `finish-close-game-${suffix}`;
+    const registryId = 20_000 + (Number.parseInt(suffix.slice(0, 8), 16) % 40_000);
+    await seedGame(
+      db,
+      season!.id,
+      {
+        slug: gameSlug,
+        registryId,
+        maxRunTicks: 600,
+        seedPolicies: ['fixed-course'],
+      },
+      now,
+    );
+    const profile = await upsertProfile(db, `finish-close-${randomUUID()}`);
+    await claimHandle(db, { now: () => now }, profile.userId, `f${randomUUID().slice(0, 8)}`);
+    const finishCtx = goldenEntropy();
+    finishCtx.clock = { now: () => now };
+    const issued = await issueAttempt(db, finishCtx, {
+      userId: profile.userId,
+      gameSlug,
+      seedPolicy: 'fixed-course',
+      ip: '203.0.113.112',
+    });
+    const decoded = await decodeReplay(SAMPLE);
+    if (!decoded.ok) throw new Error('invalid sample fixture');
+    const replay = await encodeReplay(
+      {
+        ...decoded.header,
+        attemptId: uuidToBytes(issued.attemptId),
+        gameRegistryId: registryId,
+      },
+      decoded.events,
+    );
+    const functionName = `delay_attempt_finish_${suffix}`;
+    const triggerName = `delay_attempt_finish_trigger_${suffix}`;
+    await pool.query(`
+      CREATE FUNCTION ${functionName}() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN
+        PERFORM pg_sleep(1);
+        RETURN NEW;
+      END
+      $$;
+      CREATE TRIGGER ${triggerName}
+      BEFORE UPDATE OF status ON attempts
+      FOR EACH ROW
+      WHEN (
+        OLD.id = '${issued.attemptId}'
+        AND OLD.status = 'issued'
+        AND NEW.status = 'submitted'
+      )
+      EXECUTE FUNCTION ${functionName}();
+    `);
+
+    try {
+      const finishing = finishAttempt(db, finishCtx, {
+        userId: profile.userId,
+        attemptId: issued.attemptId,
+        token: issued.token,
+        replayB64: Buffer.from(replay).toString('base64'),
+        claimedScore: '302',
+      });
+      await waitForSleepingAttemptUpdate(pool);
+      const closing = closeSeason(db, { now: () => now }, season!.id);
+      const [finishResult] = await Promise.allSettled([finishing, closing]);
+
+      const finalSeason = await db
+        .select({ status: seasons.status })
+        .from(seasons)
+        .where(eq(seasons.id, season!.id))
+        .then((rows) => rows[0]);
+      const finalAttempt = await db
+        .select({ status: attempts.status })
+        .from(attempts)
+        .where(eq(attempts.id, issued.attemptId))
+        .then((rows) => rows[0]);
+
+      if (finishResult.status === 'fulfilled') {
+        expect(finalAttempt?.status).toBe('submitted');
+        expect(finalSeason?.status).toBe('closed');
+      } else {
+        expect(finishResult.reason).toMatchObject({ code: 'SEASON_INACTIVE' });
+        expect(finalAttempt?.status).not.toBe('submitted');
+        expect(finalSeason?.status).toBe('closing');
+      }
+      expect([finalAttempt?.status, finalSeason?.status]).not.toEqual(['submitted', 'closing']);
+    } finally {
+      await pool.query(`DROP TRIGGER IF EXISTS ${triggerName} ON attempts`);
+      await pool.query(`DROP FUNCTION IF EXISTS ${functionName}()`);
+    }
+  });
+
   it.each(['closing', 'closed'] as const)(
     'rejects finish when its season is %s',
     async (seasonStatus) => {
@@ -1732,6 +1836,25 @@ async function waitForSleepingAttemptInsert(pool: pg.Pool): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
   throw new Error('timed out waiting for delayed attempt insert');
+}
+
+async function waitForSleepingAttemptUpdate(pool: pg.Pool): Promise<void> {
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    const result = await pool.query<{ found: boolean }>(`
+      SELECT EXISTS (
+        SELECT 1
+        FROM pg_stat_activity
+        WHERE datname = current_database()
+          AND state = 'active'
+          AND wait_event = 'PgSleep'
+          AND query ILIKE '%update "attempts"%'
+      ) AS found
+    `);
+    if (result.rows[0]?.found) return;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  throw new Error('timed out waiting for delayed attempt update');
 }
 
 async function loadOrderedThenRebuild(
