@@ -16,26 +16,26 @@ down before any code depends on them.
 - [x] 1.0 Create `.gitignore` covering `Credentials/`, `*.env`, `.env*`, and service-account
       JSON patterns, **before** `git init`. Verify with `git ls-files --others --exclude-standard`.
       _(Done ahead of spec authoring — R11.1)_
-- [ ] 1.1 Write `docs/competitive-spec.md` **first**, before any simulation code. Define tick
+- [x] 1.1 Write `docs/competitive-spec.md` **first**, before any simulation code. Define tick
       rate, score datatype, replay format version, seed format, attempt lifecycle, pause/focus
       policy, personal-best rules, tie rules, championship point formula, version-pinning policy.
       Include the seven conditions every ranked game must satisfy. Keep it short enough to read
       in one sitting. _(R12)_
-- [ ] 1.2 Scaffold the pnpm workspace: root `package.json`, `pnpm-workspace.yaml`, `turbo.json`,
+- [x] 1.2 Scaffold the pnpm workspace: root `package.json`, `pnpm-workspace.yaml`, `turbo.json`,
       `tsconfig.base.json`, `vitest.workspace.ts`. TypeScript strict, `noUncheckedIndexedAccess`,
       `exactOptionalPropertyTypes`. _(R11.5)_
-- [ ] 1.3 Create `packages/config-ts` and `packages/config-eslint` as shared config packages.
-- [ ] 1.4 Write the determinism ESLint rule in `config-eslint`: ban the forbidden `Math` members,
+- [x] 1.3 Create `packages/config-ts` and `packages/config-eslint` as shared config packages.
+- [x] 1.4 Write the determinism ESLint rule in `config-eslint`: ban the forbidden `Math` members,
       the `**` operator, `Date.now`, `new Date`, `performance.now`, and `crypto.getRandomValues`
       within `sim-core/src` and any `**/simulation/**` path. Also ban imports of Phaser, React,
       Next, `node:*`, and DOM globals from those paths (design §1). _(R4.4)_
-- [ ] 1.5 Write the credential-leak test: assert `git ls-files` contains nothing matching
+- [x] 1.5 Write the credential-leak test: assert `git ls-files` contains nothing matching
       credential patterns. Must fail if someone force-adds a secret. _(R11.2)_
-- [ ] 1.6 Add a dependency guard test asserting no `-simd` Rapier variant is present and that the
+- [x] 1.6 Add a dependency guard test asserting no `-simd` Rapier variant is present and that the
       Rapier dependency is an exact pin with no range prefix. _(R1.1, R1.3)_
-- [ ] 1.7 CI workflow `verify` job: install, lint, typecheck, unit tests, credential-leak test.
+- [x] 1.7 CI workflow `verify` job: install, lint, typecheck, unit tests, credential-leak test.
       Runs on every PR. _(R11.5)_
-- [ ] 1.8 Write ADR-0002 (`-compat` build choice) and ADR-0003 (PRNG choice). Short, one page each.
+- [x] 1.8 Write ADR-0002 (`-compat` build choice) and ADR-0003 (PRNG choice). Short, one page each.
 
 **Tests:** lint/typecheck/unit all green in CI. Credential-leak test passes and demonstrably
 fails when a secret is force-added. Determinism lint rule demonstrably fails on a file using
@@ -43,8 +43,6 @@ fails when a secret is force-added. Determinism lint rule demonstrably fails on 
 
 **Demo:** fresh clone → `pnpm install && pnpm build && pnpm test` green.
 `git check-ignore -v Credentials/.env` confirms exclusion. `docs/competitive-spec.md` reviewed.
-
-**Do not:** create a GitHub remote or push. Local only until the user says otherwise.
 
 ---
 
