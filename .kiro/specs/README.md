@@ -9,7 +9,7 @@ design is **approved** and every earlier spec's definition of done is green.
 | [02](./02-tournament-platform-ranking/) | Tournament Platform and Ranking | **full** | 5–9, 11, 13 | **done, merged** ([PR #2](https://github.com/Nether403/Stickworld-Tournament/pull/2)) |
 | [03](./03-game-production-kit/) | Game Production Kit and Reference Game | **full** | 10, 12, 14 | **done, merged** ([PR #3](https://github.com/Nether403/Stickworld-Tournament/pull/3)) |
 | [04](./04-roster-production/) | Roster Production (games 3–10) | **full** | 15–18 | **done, merged** ([PR #4](https://github.com/Nether403/Stickworld-Tournament/pull/4)) |
-| [05](./05-assets-integrity-operations-launch/) | Assets, Integrity, Operations, Launch | **full** | 19–24 | **waiting for approval** (ADR-0007) |
+| [05](./05-assets-integrity-operations-launch/) | Assets, Integrity, Operations, Launch | **full** | 19–24 | **approved 2026-08-18; executing** |
 
 Plus a non-spec parallel track: [`docs/legal/brand-and-ip-clearance.md`](../../docs/legal/brand-and-ip-clearance.md) — started, long lead times, gates **public** naming and Season 1.
 
@@ -44,7 +44,7 @@ Spec 3  merged to main (PR #3)
    ▼
 Spec 4  merged to main (PR #4)
    ▼
-Spec 5  full-depth design ──► REPORT TO USER, STOP until approved ──► execute → launch
+Spec 5  approved 2026-08-18 ──► executing ──► STOP after exit evidence
 ```
 
 ---

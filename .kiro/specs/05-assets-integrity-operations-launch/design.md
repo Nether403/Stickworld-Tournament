@@ -3,7 +3,7 @@
 **Depth:** full. This document is detailed enough to implement from directly.
 **Fork:** Branch A (ADR-0001). Worker stays Node.
 **Launch contracts:** ADR-0007.
-**Status:** waiting for approval. Do not execute.
+**Status:** approved 2026-08-18; executing.
 
 The previous scope draft named six tasks and five open questions. Those
 questions are closed in ADR-0007. Goldens and `docs/games/*.md` still win
@@ -448,5 +448,5 @@ Bump the spec header to version 2. `seasons.rules_version = 2` for
 
 ## 16. Tasks
 
-See `tasks.md`. Task 6 is blocked on Task 3 and Task 5 evidence. Do not
-execute any task until this spec and ADR-0007 are approved.
+See `tasks.md`. Task 6 is blocked on Task 3 and Task 5 evidence. Owner
+approved 2026-08-18. Execute in order.

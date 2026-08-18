@@ -26,9 +26,9 @@ Frozen v1 game contracts: [`docs/games/hookline-sprint.md`](docs/games/hookline-
 Roster games 3–10. Decisions: [`docs/adr/0006-spec4-roster-contracts.md`](docs/adr/0006-spec4-roster-contracts.md).
 [`.kiro/specs/04-roster-production/`](.kiro/specs/04-roster-production/).
 
-## Spec 5 (waiting for approval)
+## Spec 5 (approved 2026-08-18; executing)
 
-Assets, integrity, operations, launch. Do not execute until ADR-0007 is accepted.
+Assets, integrity, operations, launch. Decisions locked in ADR-0007.
 [`.kiro/specs/05-assets-integrity-operations-launch/`](.kiro/specs/05-assets-integrity-operations-launch/).
 Decisions: [`docs/adr/0007-spec5-launch-contracts.md`](docs/adr/0007-spec5-launch-contracts.md).
 

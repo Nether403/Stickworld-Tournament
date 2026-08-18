@@ -1,7 +1,6 @@
 # Spec 5 — Tasks
 
-**Status:** waiting for approval. Spec 4 is merged (PR #4).
-**Do not execute until ADR-0007 and this spec are approved.**
+**Status:** approved 2026-08-18; executing. Spec 4 is merged (PR #4).
 
 Legend: `[ ]` not started · `[~]` in progress · `[x]` done
 Goldens: Hookline `9c52d8f426f31ee1`, Pickaxe `6b03896db5837763` — do not

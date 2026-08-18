@@ -1,7 +1,7 @@
 # ADR-0007 — Spec 5 launch contracts
 
-**Status:** proposed for Spec 5 deepening (2026-08-18). Do not execute Spec 5
-until the owner accepts this ADR.
+**Status:** accepted 2026-08-18. Owner approved ADR-0007 and the Spec 5
+full-depth documents. Execution follows `tasks.md`.
 **Spec:** 5
 **Depends on:** Spec 4 merged ([PR #4](https://github.com/Nether403/Stickworld-Tournament/pull/4)),
 Branch A (ADR-0001), ADR-0004, ADR-0005, ADR-0006
