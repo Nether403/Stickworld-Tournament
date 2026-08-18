@@ -46,6 +46,15 @@ async function loadGame(registryId: number): Promise<StickworldGame | undefined>
       return undefined;
     }
   }
+  if (registryId === 4) {
+    const url = new URL('../../../../games/ragdoll-archery-rush/dist/index.js', import.meta.url);
+    try {
+      const mod = (await import(url.href)) as { ragdollArcheryRushGame: StickworldGame };
+      return mod.ragdollArcheryRushGame;
+    } catch {
+      return undefined;
+    }
+  }
   return undefined;
 }
 

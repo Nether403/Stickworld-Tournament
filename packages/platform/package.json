@@ -24,6 +24,7 @@
     "@stickworld/game-hookline-sprint": "workspace:*",
     "@stickworld/game-pickaxe-ascent": "workspace:*",
     "@stickworld/game-launch-lab": "workspace:*",
+    "@stickworld/game-ragdoll-archery-rush": "workspace:*",
     "@stickworld/replay": "workspace:*",
     "@stickworld/sim-core": "workspace:*",
     "drizzle-orm": "0.45.2",

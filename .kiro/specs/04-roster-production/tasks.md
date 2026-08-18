@@ -13,22 +13,22 @@ Geometry and score numbers: `docs/games/*.md` win if this file and those disagre
 **Objective:** three more catalogue games; projectile in the kit; ragdoll proved
 on Archery; best-of is one replay. No GameHost / `/v1` / schema edits.
 
-- [ ] 1.1 `physics-kit`: `launchImpulse` (or equivalent) with a kit unit test.
+- [x] 1.1 `physics-kit`: `launchImpulse` (or equivalent) with a kit unit test.
       `detmath` only. Construction still through `SimWorld.createRigidBody`.
       _(R1.1)_
-- [ ] 1.2 `games/launch-lab` **simulation only** from `docs/games/launch-lab.md`.
+- [x] 1.2 `games/launch-lab` **simulation only** from `docs/games/launch-lab.md`.
       Three sub-attempts, pose reset without new bodies, sum aggregation tests,
       miss-launch scores 0 for that slot. No Phaser. _(R1.2, R1.3)_
-- [ ] 1.3 Launch Lab goldens + `fixtures/sample.swr` + `pnpm replay:verify`.
+- [x] 1.3 Launch Lab goldens + `fixtures/sample.swr` + `pnpm replay:verify`.
       Compressed sample (and a 90 s synthetic) `< 5120` bytes. Contract-suite.
       _(R1.4)_
-- [ ] 1.4 Launch Lab `./client` + `/play/launch-lab`. Same host, same UI package.
+- [x] 1.4 Launch Lab `./client` + `/play/launch-lab`. Same host, same UI package.
       Seed `registry_id = 3` + `GAMES` map. Worker extra dep `.` only.
       Playwright: practice; ranked 401; this page does not fetch other games.
       _(R1.8, R6)_
-- [ ] 1.5 `games/ragdoll-archery-rush` simulation from its game doc. Ten-body
+- [x] 1.5 `games/ragdoll-archery-rush` simulation from its game doc. Ten-body
       ragdoll, static targets, integer aim+draw. Goldens. Tiny replay. _(R1.6)_
-- [ ] 1.6 Archery Phaser + play page + seed `registry_id = 4` + checklist.
+- [x] 1.6 Archery Phaser + play page + seed `registry_id = 4` + checklist.
       Then extract the proved ragdoll into `physics-kit`. Archery hashes
       **byte-identical**. Do not add `@stickworld/ragdoll` unless Hammer also
       imports it (it should not). _(R1.6)_

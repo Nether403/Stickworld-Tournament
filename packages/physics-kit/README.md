@@ -21,10 +21,9 @@ Task 2 must not regenerate those files.
 - `launchImpulse(body, dir, speed)` — set linvel to unit direction × speed (impulse-from-rest)
 - `resetDynamicPose` — best-of pose reset without new bodies
 - Planted / dynamic capsules, dynamic cuboid, revolute + fixed joints
+- `createTenBodyRagdoll` — extracted from Ragdoll Archery Rush after goldens (`370da3b8b548c5f8`)
 
-## Not in Spec 3
+## Later waves (not yet in this package until a consumer proves them)
 
-**Ragdoll is not implemented.** Hookline Sprint and Pickaxe Ascent v1 use a locked-rotation
-capsule (Pickaxe adds a kinematic pickaxe body). A ten-body stickman assembly waits for the
-first game that simulates one (Spec 4). Wheels, breakables, and moving platforms are also
-out of this package until a game proves them.
+Wheels, breakables, kinematic character controllers, and moving-platform steppers
+wait for their first Spec 4 consumer. Ragdoll is Wave A (`createTenBodyRagdoll`).

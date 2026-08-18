@@ -85,6 +85,24 @@ export default async function HomePage(): Promise<ReactNode> {
             )}
           </p>
         </article>
+        <article>
+          <h2>Ragdoll Archery Rush</h2>
+          <p>Draw, aim, and release at static discs. Recoil is simulated.</p>
+          <p>
+            <Link href="/play/ragdoll-archery-rush">Practice</Link>
+            {signedIn ? (
+              <>
+                {' '}
+                <Link href="/play/ragdoll-archery-rush?mode=ranked">Ranked</Link>
+              </>
+            ) : (
+              <>
+                {' '}
+                <Link href="/auth/sign-in">Sign in to play ranked</Link>
+              </>
+            )}
+          </p>
+        </article>
       </section>
     </main>
   );

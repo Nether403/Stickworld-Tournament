@@ -133,5 +133,7 @@ maxScoreEvents: 64
 
 ## Kit finding log
 
-Fill during Task 1.5–1.6. Ragdoll extract must not change freeze hashes.
-v1 targets are static (movers are Wave B).
+- v1 targets are static (movers are Wave B).
+- Ragdoll extracted into `physics-kit` `createTenBodyRagdoll` after goldens. Freeze hash `370da3b8b548c5f8` stayed byte-identical.
+- No `@stickworld/ragdoll` package. Hammer does not import the assembly.
+- Wave A platform increment: none.

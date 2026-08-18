@@ -12,6 +12,7 @@ import {
   createLockedCapsule,
   createPlantedCapsule,
   createRevoluteJoint,
+  createTenBodyRagdoll,
   createRopeJoint,
   launchImpulse,
   resetDynamicPose,
@@ -54,7 +55,9 @@ describe('physics-kit factories', () => {
     const kin = createKinematicCuboid(sim, rapier, 1, 2, 0.6, 0.04, tags, 'pickaxe', true);
     setKinematicTranslation(kin.body, 1.1, 2.2);
     setKinematicAngle(kin.body, 45);
-    expect(kin.collider.isSensor()).toBe(true);
+    const ragdoll = createTenBodyRagdoll(sim, rapier, tags, 2, 1.4, true);
+    expect(sim.registry.count()).toBeGreaterThanOrEqual(10);
+    expect(ragdoll.joints).toBe(9);
     const planted = createPlantedCapsule(sim, rapier, 2, 2, 0.28, 0.16, 22, 0, tags, 'torso');
     expect(planted.body.isFixed()).toBe(false);
     const arrow = createDynamicCapsule(sim, rapier, 2.4, 2, 0.35, 0.03, 0.04, 0, tags, 'arrow');

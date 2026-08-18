@@ -326,3 +326,77 @@ export function createFixedJoint(
     true,
   );
 }
+
+export const RAGDOLL_LIMITS = {
+  head: { min: -40, max: 40 },
+  shoulder: { min: -110, max: 40 },
+  elbow: { min: 0, max: 140 },
+  hip: { min: -20, max: 80 },
+  knee: { min: 0, max: 140 },
+} as const;
+
+export type RagdollPart = ReturnType<typeof createDynamicCapsule>;
+
+export interface TenBodyRagdoll {
+  torso: RagdollPart;
+  head: RagdollPart;
+  lUpper: RagdollPart;
+  lLower: RagdollPart;
+  rUpper: RagdollPart;
+  rLower: RagdollPart;
+  lThigh: RagdollPart;
+  lShin: RagdollPart;
+  rThigh: RagdollPart;
+  rShin: RagdollPart;
+  joints: number;
+}
+
+function ragdollLimits(minDeg: number, maxDeg: number): { min: number; max: number } {
+  return { min: degreesToRadians(minDeg), max: degreesToRadians(maxDeg) };
+}
+
+/** Ten-body stickman, root-to-leaves. Extracted from Ragdoll Archery Rush after goldens. */
+export function createTenBodyRagdoll(
+  sim: SimWorld,
+  rapier: RapierModule,
+  tags: ColliderTags,
+  originX: number,
+  originY: number,
+  plantedTorso: boolean,
+): TenBodyRagdoll {
+  const torsoFactory = plantedTorso ? createPlantedCapsule : createDynamicCapsule;
+  const torso = torsoFactory(sim, rapier, originX, originY, 0.28, 0.16, 22, 0.04, tags, 'torso');
+  const head = createDynamicCapsule(sim, rapier, originX, originY + 0.56, 0.08, 0.12, 6, 0.04, tags, 'head');
+  const lUpper = createDynamicCapsule(sim, rapier, originX - 0.28, originY + 0.18, 0.14, 0.07, 4, 0.04, tags, 'l-upper');
+  const lLower = createDynamicCapsule(sim, rapier, originX - 0.48, originY - 0.08, 0.13, 0.06, 3, 0.04, tags, 'l-lower');
+  const rUpper = createDynamicCapsule(sim, rapier, originX + 0.28, originY + 0.18, 0.14, 0.07, 4, 0.04, tags, 'r-upper');
+  const rLower = createDynamicCapsule(sim, rapier, originX + 0.48, originY - 0.08, 0.13, 0.06, 3, 0.04, tags, 'r-lower');
+  const lThigh = createDynamicCapsule(sim, rapier, originX - 0.1, originY - 0.48, 0.18, 0.08, 7, 0.04, tags, 'l-thigh');
+  const lShin = createDynamicCapsule(sim, rapier, originX - 0.1, originY - 0.86, 0.16, 0.07, 5, 0.04, tags, 'l-shin');
+  const rThigh = createDynamicCapsule(sim, rapier, originX + 0.1, originY - 0.48, 0.18, 0.08, 7, 0.04, tags, 'r-thigh');
+  const rShin = createDynamicCapsule(sim, rapier, originX + 0.1, originY - 0.86, 0.16, 0.07, 5, 0.04, tags, 'r-shin');
+
+  createRevoluteJoint(sim.world, rapier, torso.body, head.body, { x: 0, y: 0.4 }, { x: 0, y: -0.16 }, ragdollLimits(RAGDOLL_LIMITS.head.min, RAGDOLL_LIMITS.head.max));
+  createRevoluteJoint(sim.world, rapier, torso.body, lUpper.body, { x: -0.16, y: 0.2 }, { x: 0.14, y: 0 }, ragdollLimits(RAGDOLL_LIMITS.shoulder.min, RAGDOLL_LIMITS.shoulder.max));
+  createRevoluteJoint(sim.world, rapier, lUpper.body, lLower.body, { x: 0, y: -0.14 }, { x: 0, y: 0.13 }, ragdollLimits(RAGDOLL_LIMITS.elbow.min, RAGDOLL_LIMITS.elbow.max));
+  createRevoluteJoint(sim.world, rapier, torso.body, rUpper.body, { x: 0.16, y: 0.2 }, { x: -0.14, y: 0 }, ragdollLimits(RAGDOLL_LIMITS.shoulder.min, RAGDOLL_LIMITS.shoulder.max));
+  createRevoluteJoint(sim.world, rapier, rUpper.body, rLower.body, { x: 0, y: -0.14 }, { x: 0, y: 0.13 }, ragdollLimits(RAGDOLL_LIMITS.elbow.min, RAGDOLL_LIMITS.elbow.max));
+  createRevoluteJoint(sim.world, rapier, torso.body, lThigh.body, { x: -0.08, y: -0.28 }, { x: 0, y: 0.18 }, ragdollLimits(RAGDOLL_LIMITS.hip.min, RAGDOLL_LIMITS.hip.max));
+  createRevoluteJoint(sim.world, rapier, lThigh.body, lShin.body, { x: 0, y: -0.18 }, { x: 0, y: 0.16 }, ragdollLimits(RAGDOLL_LIMITS.knee.min, RAGDOLL_LIMITS.knee.max));
+  createRevoluteJoint(sim.world, rapier, torso.body, rThigh.body, { x: 0.08, y: -0.28 }, { x: 0, y: 0.18 }, ragdollLimits(RAGDOLL_LIMITS.hip.min, RAGDOLL_LIMITS.hip.max));
+  createRevoluteJoint(sim.world, rapier, rThigh.body, rShin.body, { x: 0, y: -0.18 }, { x: 0, y: 0.16 }, ragdollLimits(RAGDOLL_LIMITS.knee.min, RAGDOLL_LIMITS.knee.max));
+
+  return {
+    torso,
+    head,
+    lUpper,
+    lLower,
+    rUpper,
+    rLower,
+    lThigh,
+    lShin,
+    rThigh,
+    rShin,
+    joints: 9,
+  };
+}

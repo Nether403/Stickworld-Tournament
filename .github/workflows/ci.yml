@@ -56,6 +56,7 @@ jobs:
       - run: pnpm --filter @stickworld/game-hookline-sprint score:browser
       - run: pnpm --filter @stickworld/game-pickaxe-ascent score:browser
       - run: pnpm --filter @stickworld/game-launch-lab score:browser
+      - run: pnpm --filter @stickworld/game-ragdoll-archery-rush score:browser
       - run: pnpm --filter @stickworld/web e2e
 
   negative:
