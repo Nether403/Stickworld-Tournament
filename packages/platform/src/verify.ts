@@ -285,7 +285,11 @@ export async function processNextJob(
   const job = await claimJob(db, workerId, clock.now(), options.staleLockSeconds);
   if (!job) return false;
   try {
-    await processClaimedJob(db, clock, job, { maxClaims: options.maxClaims });
+    if (options.maxClaims === undefined) {
+      await processClaimedJob(db, clock, job);
+    } else {
+      await processClaimedJob(db, clock, job, { maxClaims: options.maxClaims });
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'unknown';
     await db

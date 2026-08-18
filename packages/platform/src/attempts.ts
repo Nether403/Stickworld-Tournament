@@ -7,7 +7,7 @@ import {
   seasons,
   type Database,
 } from '@stickworld/db';
-import { and, eq, gte, lt, sql } from 'drizzle-orm';
+import { and, asc, eq, gte, lt, sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { audit } from './audit.js';
 import { signAttemptToken } from './attempt-token.js';
@@ -88,9 +88,16 @@ export async function issueAttempt(
       .select()
       .from(seasonGames)
       .innerJoin(seasons, eq(seasonGames.seasonId, seasons.id))
-      .where(and(eq(seasonGames.gameId, game.id), eq(seasonGames.seedPolicy, input.seedPolicy)))
+      .where(
+        and(
+          eq(seasonGames.gameId, game.id),
+          eq(seasonGames.seedPolicy, input.seedPolicy),
+          eq(seasons.status, 'active'),
+        ),
+      )
+      .orderBy(asc(seasons.slug))
       .then((r) => r[0]);
-    if (!sg || sg.seasons.status !== 'active') throw new ApiError('SEASON_INACTIVE');
+    if (!sg) throw new ApiError('SEASON_INACTIVE');
     if (now < sg.season_games.activeFrom || now > sg.season_games.activeTo) {
       throw new ApiError('SEASON_INACTIVE');
     }

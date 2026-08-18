@@ -135,6 +135,30 @@ async function writeLiveSnapshot(
   });
 }
 
+function standingsFingerprint(payload: ChampionshipPayload): string {
+  return JSON.stringify({
+    provisional: payload.provisional,
+    rows: payload.rows.map((row) => ({
+      rank: row.rank,
+      userId: row.userId,
+      handle: row.handle,
+      points: row.points,
+      wins: row.wins,
+      top10: row.top10,
+      median: row.median,
+      achievedAt: row.achievedAt,
+      games: Object.fromEntries(
+        Object.entries(row.games)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([id, g]) => [
+            id,
+            { points: g.points, rank: g.rank, provisional: g.provisional },
+          ]),
+      ),
+    })),
+  });
+}
+
 export async function recomputeSeason(
   db: Database,
   clock: Clock,
@@ -242,9 +266,7 @@ export async function recomputeSeason(
     .then((r) => r[0]);
   const previous = existingChamp?.payload as ChampionshipPayload | undefined;
   const standingsChanged =
-    !previous ||
-    JSON.stringify({ provisional: previous.provisional, rows: previous.rows }) !==
-      JSON.stringify({ provisional: champ.provisional, rows: champ.rows });
+    !previous || standingsFingerprint(previous) !== standingsFingerprint(champ);
   if (standingsChanged) {
     await writeLiveSnapshot(db, seasonId, 'championship', seasonId, champ, startedAt);
   }

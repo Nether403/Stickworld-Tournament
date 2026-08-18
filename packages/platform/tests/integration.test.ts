@@ -31,7 +31,6 @@ import { processClaimedJob, processNextJob } from '../src/verify.js';
 import { closeSeason, readLeaderboard, readStandings, recomputeSeason } from '../src/recompute.js';
 import { rotateDaily } from '../src/daily.js';
 import { packSeed, unpackSeed, uuidToBytes } from '../src/seed128.js';
-import { ApiError } from '../src/errors.js';
 import { floorWindow, hitRateLimit } from '../src/rate-limit.js';
 import type { PlatformContext } from '../src/context.js';
 import pg from 'pg';
@@ -71,6 +70,7 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
     await seedDatabase();
     pool = createDirectPool();
     db = createDb(pool);
+    await db.update(seasons).set({ status: 'active' }).where(eq(seasons.slug, 'ci'));
   }, 60_000);
 
   afterAll(async () => {
@@ -178,7 +178,9 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
       .then((r) => r[0]);
     expect(sub?.verificationStatus).toBe('verified');
     expect(sub?.verifiedScore).toBe(302n);
-    expect(sub?.verifiedHash && Buffer.from(sub.verifiedHash).toString('hex')).toBe('e6ee35729a0c77b3');
+    expect(sub?.verifiedHash && Buffer.from(sub.verifiedHash).readBigUInt64LE(0).toString(16).padStart(16, '0')).toBe(
+      'e6ee35729a0c77b3',
+    );
 
     const season = await db.select().from(seasons).where(eq(seasons.slug, 'ci')).then((r) => r[0]);
     const sg = await db
@@ -417,14 +419,16 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
   });
 
   it('keeps daily verified runs off the championship snapshot', async () => {
-    const season = await db.select().from(seasons).where(eq(seasons.slug, 'ci')).then((r) => r[0]);
-    await recomputeSeason(db, c.clock, season!.id, { force: true });
+    const { season, sg, dailySg } = await createIsolatedSeason(db, `iso-${randomUUID().slice(0, 8)}`);
+    const profile = await upsertProfile(db, `auth-${randomUUID()}`);
+    await insertVerifiedBest(db, profile.userId, sg.id, 100n);
+    await recomputeSeason(db, c.clock, season.id, { force: true });
     const beforeSnap = await db
       .select()
       .from(rankingSnapshots)
       .where(
         and(
-          eq(rankingSnapshots.seasonId, season!.id),
+          eq(rankingSnapshots.seasonId, season.id),
           eq(rankingSnapshots.scope, 'championship'),
           eq(rankingSnapshots.frozen, false),
         ),
@@ -432,58 +436,15 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
       .then((r) => r[0]);
     const beforeBytes = JSON.stringify(beforeSnap?.payload ?? null);
 
-    const profile = await upsertProfile(db, `auth-${randomUUID()}`);
-    await claimHandle(db, c.clock, profile.userId, `d${randomUUID().slice(0, 8)}`);
-    const issued = await issueAttempt(db, c, {
-      userId: profile.userId,
-      gameSlug: 'test-chamber',
-      seedPolicy: 'daily-seed',
-      ip: '10.0.0.6',
-    });
-    const dailySg = await db
-      .select()
-      .from(seasonGames)
-      .where(eq(seasonGames.seedPolicy, 'daily-seed'))
-      .then((r) => r[0]);
-    const runId = randomUUID();
-    await db.insert(runs).values({
-      id: runId,
-      attemptId: issued.attemptId,
-      userId: profile.userId,
-      claimedScore: 1n,
-      totalTicks: 1,
-      replay: Buffer.from([1, 2, 3]),
-      finalStateHash: Buffer.alloc(8),
-    });
-    await db.insert(scoreSubmissions).values({
-      runId,
-      verificationStatus: 'verified',
-      verifiedScore: 1n,
-      verifiedAt: new Date(),
-    });
-    const vr = await db
-      .insert(verifiedResults)
-      .values({
-        userId: profile.userId,
-        seasonGameId: dailySg!.id,
-        runId,
-        score: 1n,
-        achievedAt: new Date(),
-      })
-      .returning();
-    await db.insert(gameBests).values({
-      seasonGameId: dailySg!.id,
-      userId: profile.userId,
-      verifiedResultId: vr[0]!.id,
-      score: 1n,
-    });
-    await recomputeSeason(db, c.clock, season!.id, { force: true });
+    const dailyUser = await upsertProfile(db, `auth-${randomUUID()}`);
+    await insertVerifiedBest(db, dailyUser.userId, dailySg.id, 999n);
+    await recomputeSeason(db, c.clock, season.id, { force: true });
     const afterSnap = await db
       .select()
       .from(rankingSnapshots)
       .where(
         and(
-          eq(rankingSnapshots.seasonId, season!.id),
+          eq(rankingSnapshots.seasonId, season.id),
           eq(rankingSnapshots.scope, 'championship'),
           eq(rankingSnapshots.frozen, false),
         ),
@@ -615,7 +576,11 @@ async function loadOrderedThenRebuild(
 async function createIsolatedSeason(
   db: Database,
   slug: string,
-): Promise<{ season: typeof seasons.$inferSelect; sg: typeof seasonGames.$inferSelect }> {
+): Promise<{
+  season: typeof seasons.$inferSelect;
+  sg: typeof seasonGames.$inferSelect;
+  dailySg: typeof seasonGames.$inferSelect;
+}> {
   const [season] = await db
     .insert(seasons)
     .values({
@@ -643,7 +608,18 @@ async function createIsolatedSeason(
       activeTo: new Date('2099-01-01T00:00:00.000Z'),
     })
     .returning();
-  return { season: season!, sg: sg! };
+  const [dailySg] = await db
+    .insert(seasonGames)
+    .values({
+      seasonId: season!.id,
+      gameId: game!.id,
+      gameVersionId: version!.id,
+      seedPolicy: 'daily-seed',
+      activeFrom: new Date('2020-01-01T00:00:00.000Z'),
+      activeTo: new Date('2099-01-01T00:00:00.000Z'),
+    })
+    .returning();
+  return { season: season!, sg: sg!, dailySg: dailySg! };
 }
 
 async function insertVerifiedBest(
