@@ -1426,8 +1426,10 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
       .from(profiles)
       .where(eq(profiles.userId, target.userId))
       .then((rows) => rows[0]);
-    expect(targetAfter).toMatchObject({ status: 'anonymised' });
-    expect(targetAfter?.handle).toMatch(/^d-[0-9a-f]{12,13}$/);
+    expect(targetAfter).toMatchObject({
+      status: 'anonymised',
+      handle: expect.stringMatching(/^d-[0-9a-f]{12,13}$/),
+    });
     expect(
       await db.select().from(moderationActions).where(eq(moderationActions.reportId, report.id)),
     ).toHaveLength(1);
