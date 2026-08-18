@@ -24,6 +24,7 @@ jobs:
       - run: node scripts/check-forbidden-names.mjs
       - run: node scripts/check-game-integration.mjs
       - run: pnpm build
+      - run: node scripts/check-play-bundle.mjs
       - run: pnpm typecheck
       - run: pnpm test
 
