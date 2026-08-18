@@ -1,0 +1,10 @@
+id: tournament-champion-badge
+provider: gemini
+model: gemini-2.5-flash-image
+class_default: generated
+prompt: |
+  Create an original flat geometric tournament champion badge for Stickworld Tournament.
+  Use only a dark navy #1a1f2b background, warm ivory #f4efe6 linework, and coral
+  #e85d4c accents. Use abstract brackets, diamonds, and rays; do not depict a
+  character, third-party game silhouette, lettering, logo, trademark, or photorealism.
+  Center the badge on a square transparent canvas with crisp vector-like edges.

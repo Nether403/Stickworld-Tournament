@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 96" role="img">
+  <rect width="560" height="96" rx="12" fill="#1a1f2b"/>
+  <text x="28" y="50" fill="#f4efe6" font-family="ui-sans-serif,system-ui,sans-serif" font-size="38" font-weight="800" letter-spacing="2">STICKWORLD</text>
+  <path d="M30 62h334v5H30z" fill="#e85d4c"/>
+  <text x="379" y="68" fill="#f4efe6" font-family="ui-sans-serif,system-ui,sans-serif" font-size="18" font-weight="700" letter-spacing="3">TOURNAMENT</text>
+</svg>

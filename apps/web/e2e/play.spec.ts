@@ -1,7 +1,15 @@
 import { expect, test } from '@playwright/test';
 
+const BANNED_AI_HOSTS = new Set([
+  'generativelanguage.googleapis.com',
+  'api.deepgram.com',
+  'openrouter.ai',
+]);
+
 test('catalogue lists live games through Demolition Dive, not Test Chamber', async ({ page }) => {
   await page.goto('/');
+  await expect(page.getByAltText('Stickworld Tournament logo')).toBeVisible();
+  await expect(page.getByAltText('Stickworld Tournament wordmark')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Hookline Sprint' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Pickaxe Ascent' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Launch Lab' })).toBeVisible();
@@ -18,6 +26,8 @@ test('catalogue lists live games through Demolition Dive, not Test Chamber', asy
 
 test('auth offers Google and email, not GitHub', async ({ page }) => {
   await page.goto('/auth/sign-in');
+  await expect(page.getByAltText('Stickworld Tournament logo')).toBeVisible();
+  await expect(page.getByAltText('Stickworld Tournament wordmark')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Continue with Google' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Sign in with email' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Create account' })).toBeVisible();
@@ -53,6 +63,7 @@ test('practice play shows instructions and does not fetch Pickaxe', async ({ pag
   await expect(page.getByTestId('countdown')).toBeVisible({ timeout: 60_000 });
   expect(requested.some((url) => /pickaxe/i.test(url))).toBe(false);
   expect(requested.some((url) => /launch-lab/i.test(url))).toBe(false);
+  expect(requested.filter((url) => BANNED_AI_HOSTS.has(new URL(url).hostname))).toEqual([]);
 });
 
 test('Pickaxe practice does not fetch Hookline client', async ({ page }) => {

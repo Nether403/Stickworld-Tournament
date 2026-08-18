@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { auth } from '@/lib/auth/server';
 import { HandleForm } from './handle-form';
@@ -18,6 +19,22 @@ export default async function HomePage(): Promise<ReactNode> {
 
   return (
     <main>
+      <header>
+        <Image
+          src="/assets/brand/logo.svg"
+          alt="Stickworld Tournament logo"
+          width={72}
+          height={72}
+          priority
+        />
+        <Image
+          src="/assets/brand/wordmark.svg"
+          alt="Stickworld Tournament wordmark"
+          width={420}
+          height={72}
+          priority
+        />
+      </header>
       <h1>Stickworld Tournament</h1>
       <p>Scores count only after the server re-simulates the replay.</p>
       {signedIn ? (
