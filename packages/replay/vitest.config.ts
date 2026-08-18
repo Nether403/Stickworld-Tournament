@@ -7,6 +7,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      '@stickworld/input': fileURLToPath(new URL('../input/src/index.ts', import.meta.url)),
       '@stickworld/sim-core': fileURLToPath(new URL('../sim-core/src/index.ts', import.meta.url)),
     },
   },
