@@ -60,7 +60,7 @@ export interface BikeRenderState {
 
 function wheelGrounded(
   sim: SimWorld,
-  collider: { handle: number },
+  collider: Parameters<SimWorld['world']['contactPairsWith']>[0],
   tags: Map<number, string>,
 ): boolean {
   let hit = false;
