@@ -6,6 +6,59 @@ const BANNED_AI_HOSTS = new Set([
   'openrouter.ai',
 ]);
 
+const PLAY_GAMES = [
+  {
+    slug: 'hookline-sprint',
+    stageTestId: 'hookline-stage',
+    instruction: 'Hold to attach',
+  },
+  {
+    slug: 'pickaxe-ascent',
+    stageTestId: 'pickaxe-stage',
+    instruction: 'Hold to bite',
+  },
+  {
+    slug: 'launch-lab',
+    stageTestId: 'launch-lab-stage',
+    instruction: 'Drag to set aim',
+  },
+  {
+    slug: 'ragdoll-archery-rush',
+    stageTestId: 'archery-stage',
+    instruction: 'Aim from the torso',
+  },
+  {
+    slug: 'hammer-throw-havoc',
+    stageTestId: 'hammer-stage',
+    instruction: 'Hold D or Right to spin',
+  },
+  {
+    slug: 'pogo-tower',
+    stageTestId: 'pogo-stage',
+    instruction: 'Auto-bounce on ledges',
+  },
+  {
+    slug: 'rooftop-relay',
+    stageTestId: 'rooftop-stage',
+    instruction: 'Hold Right to run',
+  },
+  {
+    slug: 'balance-bike-blitz',
+    stageTestId: 'bike-stage',
+    instruction: 'Hold Right to throttle',
+  },
+  {
+    slug: 'cargo-chaos',
+    stageTestId: 'cargo-stage',
+    instruction: 'Aim with the pointer',
+  },
+  {
+    slug: 'demolition-dive',
+    stageTestId: 'demolition-stage',
+    instruction: 'Drag to aim from the gantry',
+  },
+] as const;
+
 async function expectWithinViewport(locator: Locator) {
   const bounds = await locator.evaluate((element) => {
     const rect = element.getBoundingClientRect();
@@ -19,27 +72,31 @@ async function expectWithinViewport(locator: Locator) {
   expect(bounds.right).toBeLessThanOrEqual(bounds.viewportWidth);
 }
 
-test('catalogue lists live games through Demolition Dive, not Test Chamber', async ({ page }) => {
-  await page.goto('/');
-  const logo = page.getByAltText('Stickworld Tournament logo');
-  const wordmark = page.getByAltText('Stickworld Tournament wordmark');
-  await expect(logo).toBeVisible();
-  await expect(wordmark).toBeVisible();
-  await expectWithinViewport(logo);
-  await expectWithinViewport(wordmark);
-  await expect(page.getByRole('heading', { name: 'Hookline Sprint' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Pickaxe Ascent' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Launch Lab' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Ragdoll Archery Rush' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Hammer Throw Havoc' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Pogo Tower' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Rooftop Relay' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Balance Bike Blitz' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Cargo Chaos' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Demolition Dive' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Practice' }).first()).toBeVisible();
-  await expect(page.getByText('Test Chamber')).toHaveCount(0);
-});
+test(
+  'catalogue lists live games through Demolition Dive, not Test Chamber',
+  { tag: '@cross-browser' },
+  async ({ page }) => {
+    await page.goto('/');
+    const logo = page.getByAltText('Stickworld Tournament logo');
+    const wordmark = page.getByAltText('Stickworld Tournament wordmark');
+    await expect(logo).toBeVisible();
+    await expect(wordmark).toBeVisible();
+    await expectWithinViewport(logo);
+    await expectWithinViewport(wordmark);
+    await expect(page.getByRole('heading', { name: 'Hookline Sprint' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Pickaxe Ascent' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Launch Lab' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Ragdoll Archery Rush' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Hammer Throw Havoc' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Pogo Tower' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Rooftop Relay' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Balance Bike Blitz' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Cargo Chaos' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Demolition Dive' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Practice' }).first()).toBeVisible();
+    await expect(page.getByText('Test Chamber')).toHaveCount(0);
+  },
+);
 
 test('auth offers Google and email, not GitHub', async ({ page }) => {
   await page.goto('/auth/sign-in');
@@ -129,56 +186,57 @@ test('ranked Launch Lab issue without a session is 401', async ({ request }) => 
   expect(res.status()).toBe(401);
 });
 
-test('practice play shows instructions and does not fetch Pickaxe', async ({ page }) => {
-  const requested: string[] = [];
-  page.on('request', (req) => {
-    requested.push(req.url());
-  });
-  await page.goto('/play/hookline-sprint');
-  await expect(page.getByTestId('instructions')).toContainText('Hold to attach');
-  await expect(page.getByTestId('instructions')).toContainText('chevron');
-  await expect(page.getByTestId('hookline-stage')).toBeVisible();
-  await expect(page.getByTestId('countdown')).toBeVisible({ timeout: 60_000 });
-  expect(requested.some((url) => /pickaxe/i.test(url))).toBe(false);
-  expect(requested.some((url) => /launch-lab/i.test(url))).toBe(false);
-  expect(requested.filter((url) => BANNED_AI_HOSTS.has(new URL(url).hostname))).toEqual([]);
-});
+test(
+  'practice play shows instructions and does not fetch Pickaxe',
+  { tag: '@cross-browser' },
+  async ({ page }) => {
+    const requested: string[] = [];
+    page.on('request', (req) => {
+      requested.push(req.url());
+    });
+    await page.goto('/play/hookline-sprint');
+    await expect(page.getByTestId('instructions')).toContainText('Hold to attach');
+    await expect(page.getByTestId('instructions')).toContainText('chevron');
+    await expect(page.getByTestId('hookline-stage')).toBeVisible();
+    await expect(page.getByTestId('countdown')).toBeVisible({ timeout: 60_000 });
+    expect(requested.some((url) => /pickaxe/i.test(url))).toBe(false);
+    expect(requested.some((url) => /launch-lab/i.test(url))).toBe(false);
+    expect(requested.filter((url) => BANNED_AI_HOSTS.has(new URL(url).hostname))).toEqual([]);
+  },
+);
 
-test('Pickaxe practice does not fetch Hookline client', async ({ page }) => {
-  const requested: string[] = [];
-  page.on('request', (req) => {
-    requested.push(req.url());
-  });
-  await page.goto('/play/pickaxe-ascent');
-  await expect(page.getByTestId('instructions')).toContainText('Hold to bite');
-  await expect(page.getByTestId('pickaxe-stage')).toBeVisible();
-  await expect(page.getByTestId('countdown')).toBeVisible({ timeout: 60_000 });
-  expect(requested.some((url) => /hookline/i.test(url))).toBe(false);
-});
+test('every play route excludes the other nine game client fragments', async ({
+  browser,
+}, testInfo) => {
+  test.setTimeout(600_000);
+  const baseURL = testInfo.project.use.baseURL;
+  if (typeof baseURL !== 'string') throw new Error('Playwright baseURL is required');
 
-test('Launch Lab practice does not fetch Hookline or Pickaxe clients', async ({ page }) => {
-  const requested: string[] = [];
-  page.on('request', (req) => {
-    requested.push(req.url());
-  });
-  await page.goto('/play/launch-lab');
-  await expect(page.getByTestId('instructions')).toContainText('Drag to set aim');
-  await expect(page.getByTestId('launch-lab-stage')).toBeVisible();
-  await expect(page.getByTestId('countdown')).toBeVisible({ timeout: 60_000 });
-  expect(requested.some((url) => /hookline/i.test(url))).toBe(false);
-  expect(requested.some((url) => /pickaxe/i.test(url))).toBe(false);
-});
+  for (const game of PLAY_GAMES) {
+    const context = await browser.newContext({ baseURL });
+    const page = await context.newPage();
+    const requested: string[] = [];
+    page.on('request', (request) => {
+      requested.push(request.url());
+    });
 
-test('Archery practice does not fetch Launch Lab client', async ({ page }) => {
-  const requested: string[] = [];
-  page.on('request', (req) => {
-    requested.push(req.url());
-  });
-  await page.goto('/play/ragdoll-archery-rush');
-  await expect(page.getByTestId('instructions')).toContainText('Aim from the torso');
-  await expect(page.getByTestId('archery-stage')).toBeVisible();
-  await expect(page.getByTestId('countdown')).toBeVisible({ timeout: 60_000 });
-  expect(requested.some((url) => /launch-lab/i.test(url))).toBe(false);
+    try {
+      await page.goto(`/play/${game.slug}`);
+      await expect(page.getByTestId('instructions')).toContainText(game.instruction);
+      await expect(page.getByTestId(game.stageTestId)).toBeVisible();
+      await expect(page.getByTestId('countdown')).toBeVisible({ timeout: 60_000 });
+
+      for (const other of PLAY_GAMES) {
+        if (other.slug === game.slug) continue;
+        expect(
+          requested.some((url) => url.toLowerCase().includes(other.slug)),
+          `/play/${game.slug} requested @stickworld/game-${other.slug}`,
+        ).toBe(false);
+      }
+    } finally {
+      await context.close();
+    }
+  }
 });
 
 test('ranked Hammer issue without a session is 401', async ({ request }) => {
@@ -188,35 +246,11 @@ test('ranked Hammer issue without a session is 401', async ({ request }) => {
   expect(res.status()).toBe(401);
 });
 
-test('Hammer practice does not fetch Archery client', async ({ page }) => {
-  const requested: string[] = [];
-  page.on('request', (req) => {
-    requested.push(req.url());
-  });
-  await page.goto('/play/hammer-throw-havoc');
-  await expect(page.getByTestId('instructions')).toContainText('Hold D or Right to spin');
-  await expect(page.getByTestId('hammer-stage')).toBeVisible();
-  await expect(page.getByTestId('countdown')).toBeVisible({ timeout: 60_000 });
-  expect(requested.some((url) => /ragdoll-archery/i.test(url))).toBe(false);
-});
-
 test('ranked Pogo issue without a session is 401', async ({ request }) => {
   const res = await request.post('/v1/games/pogo-tower/attempts', {
     data: { seedPolicy: 'weekly-seed' },
   });
   expect(res.status()).toBe(401);
-});
-
-test('Pogo practice does not fetch Hammer client', async ({ page }) => {
-  const requested: string[] = [];
-  page.on('request', (req) => {
-    requested.push(req.url());
-  });
-  await page.goto('/play/pogo-tower');
-  await expect(page.getByTestId('instructions')).toContainText('Auto-bounce on ledges');
-  await expect(page.getByTestId('pogo-stage')).toBeVisible();
-  await expect(page.getByTestId('countdown')).toBeVisible({ timeout: 60_000 });
-  expect(requested.some((url) => /hammer-throw/i.test(url))).toBe(false);
 });
 
 test('ranked Rooftop issue without a session is 401', async ({ request }) => {
@@ -226,57 +260,9 @@ test('ranked Rooftop issue without a session is 401', async ({ request }) => {
   expect(res.status()).toBe(401);
 });
 
-test('Rooftop practice does not fetch Pogo client', async ({ page }) => {
-  const requested: string[] = [];
-  page.on('request', (req) => {
-    requested.push(req.url());
-  });
-  await page.goto('/play/rooftop-relay');
-  await expect(page.getByTestId('instructions')).toContainText('Hold Right to run');
-  await expect(page.getByTestId('rooftop-stage')).toBeVisible();
-  await expect(page.getByTestId('countdown')).toBeVisible({ timeout: 60_000 });
-  expect(requested.some((url) => /pogo-tower/i.test(url))).toBe(false);
-});
-
-test('Bike practice does not fetch Rooftop client', async ({ page }) => {
-  const requested: string[] = [];
-  page.on('request', (req) => {
-    requested.push(req.url());
-  });
-  await page.goto('/play/balance-bike-blitz');
-  await expect(page.getByTestId('instructions')).toContainText('Hold Right to throttle');
-  await expect(page.getByTestId('bike-stage')).toBeVisible();
-  await expect(page.getByTestId('countdown')).toBeVisible({ timeout: 60_000 });
-  expect(requested.some((url) => /rooftop-relay/i.test(url))).toBe(false);
-});
-
-test('Cargo practice does not fetch Bike client', async ({ page }) => {
-  const requested: string[] = [];
-  page.on('request', (req) => {
-    requested.push(req.url());
-  });
-  await page.goto('/play/cargo-chaos');
-  await expect(page.getByTestId('instructions')).toContainText('Aim with the pointer');
-  await expect(page.getByTestId('cargo-stage')).toBeVisible();
-  await expect(page.getByTestId('countdown')).toBeVisible({ timeout: 60_000 });
-  expect(requested.some((url) => /balance-bike/i.test(url))).toBe(false);
-});
-
 test('ranked Demolition issue without a session is 401', async ({ request }) => {
   const res = await request.post('/v1/games/demolition-dive/attempts', {
     data: { seedPolicy: 'fixed-course' },
   });
   expect(res.status()).toBe(401);
-});
-
-test('Demolition practice does not fetch Cargo client', async ({ page }) => {
-  const requested: string[] = [];
-  page.on('request', (req) => {
-    requested.push(req.url());
-  });
-  await page.goto('/play/demolition-dive');
-  await expect(page.getByTestId('instructions')).toContainText('Drag to aim from the gantry');
-  await expect(page.getByTestId('demolition-stage')).toBeVisible();
-  await expect(page.getByTestId('countdown')).toBeVisible({ timeout: 60_000 });
-  expect(requested.some((url) => /cargo-chaos/i.test(url))).toBe(false);
 });
