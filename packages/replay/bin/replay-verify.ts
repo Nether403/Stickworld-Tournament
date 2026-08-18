@@ -37,6 +37,15 @@ async function loadGame(registryId: number): Promise<StickworldGame | undefined>
       return undefined;
     }
   }
+  if (registryId === 3) {
+    const url = new URL('../../../../games/launch-lab/dist/index.js', import.meta.url);
+    try {
+      const mod = (await import(url.href)) as { launchLabGame: StickworldGame };
+      return mod.launchLabGame;
+    } catch {
+      return undefined;
+    }
+  }
   return undefined;
 }
 

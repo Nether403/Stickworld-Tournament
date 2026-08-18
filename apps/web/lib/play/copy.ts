@@ -6,3 +6,6 @@ export const PICKAXE_INSTRUCTIONS = `Hold to bite a ledge with the pickaxe. Rele
 
 Checkpoints use both colour and shape so colour is never the only cue: chevron, diamond, plus, and square, repeating up the shaft.`;
 
+export const LAUNCH_LAB_INSTRUCTIONS = `Drag to set aim (horizontal) and power (vertical). Press Space to launch; pointer-up does not launch. Hold Shift to tuck in flight. Three launches, all count. Practice can pause; ranked cannot.
+
+Rings use both colour and the same rectangular silhouette so colour is never the only cue.`;

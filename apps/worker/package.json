@@ -15,6 +15,7 @@
     "@stickworld/platform": "workspace:*",
     "@stickworld/game-hookline-sprint": "workspace:*",
     "@stickworld/game-pickaxe-ascent": "workspace:*",
+    "@stickworld/game-launch-lab": "workspace:*",
     "drizzle-orm": "0.45.2"
   },
   "devDependencies": {

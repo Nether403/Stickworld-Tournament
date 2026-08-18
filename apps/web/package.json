@@ -18,6 +18,7 @@
     "@stickworld/game-host": "workspace:*",
     "@stickworld/game-hookline-sprint": "workspace:*",
     "@stickworld/game-pickaxe-ascent": "workspace:*",
+    "@stickworld/game-launch-lab": "workspace:*",
     "@stickworld/ui": "workspace:*",
     "@stickworld/sim-core": "workspace:*",
     "next": "16.3.1",

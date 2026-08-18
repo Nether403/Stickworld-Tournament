@@ -67,6 +67,24 @@ export default async function HomePage(): Promise<ReactNode> {
             )}
           </p>
         </article>
+        <article>
+          <h2>Launch Lab</h2>
+          <p>Aim, power, and tuck three counted launches through rings onto the deck.</p>
+          <p>
+            <Link href="/play/launch-lab">Practice</Link>
+            {signedIn ? (
+              <>
+                {' '}
+                <Link href="/play/launch-lab?mode=ranked">Ranked</Link>
+              </>
+            ) : (
+              <>
+                {' '}
+                <Link href="/auth/sign-in">Sign in to play ranked</Link>
+              </>
+            )}
+          </p>
+        </article>
       </section>
     </main>
   );

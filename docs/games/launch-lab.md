@@ -108,4 +108,7 @@ maxScoreEvents: 256
 
 ## Kit finding log
 
-Fill during Task 1. If GameHost, `/v1`, or schema must change, **stop**.
+- Wave A platform increment: none. GameHost, `/v1`, and schema unchanged.
+- `launchImpulse` + `resetDynamicPose` live in `physics-kit`. Construction still uses `SimWorld.createRigidBody`.
+- Per-decimetre `distance` events would exceed `maxScoreEvents: 256` on a 90 s three-launch run. v1 emits one `distance` event per sub-attempt at close, points = accumulated `floor(maxX*10)` delta for that throw. Ranked score is unchanged versus summing per-tick deltas.
+- Best-of pose reset does not create or destroy rigid bodies after tick 0.

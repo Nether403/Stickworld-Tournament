@@ -1,9 +1,10 @@
 import { expect, test } from '@playwright/test';
 
-test('catalogue lists Hookline and Pickaxe live, not Test Chamber', async ({ page }) => {
+test('catalogue lists Hookline, Pickaxe, and Launch Lab live, not Test Chamber', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Hookline Sprint' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Pickaxe Ascent' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Launch Lab' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Practice' }).first()).toBeVisible();
   await expect(page.getByText('Test Chamber')).toHaveCount(0);
 });
@@ -26,6 +27,13 @@ test('ranked issue without a session is 401', async ({ request }) => {
   expect(body.error?.code).toBe('UNAUTHENTICATED');
 });
 
+test('ranked Launch Lab issue without a session is 401', async ({ request }) => {
+  const res = await request.post('/v1/games/launch-lab/attempts', {
+    data: { seedPolicy: 'fixed-course' },
+  });
+  expect(res.status()).toBe(401);
+});
+
 test('practice play shows instructions and does not fetch Pickaxe', async ({ page }) => {
   const requested: string[] = [];
   page.on('request', (req) => {
@@ -37,6 +45,7 @@ test('practice play shows instructions and does not fetch Pickaxe', async ({ pag
   await expect(page.getByTestId('hookline-stage')).toBeVisible();
   await expect(page.getByTestId('countdown')).toBeVisible({ timeout: 60_000 });
   expect(requested.some((url) => /pickaxe/i.test(url))).toBe(false);
+  expect(requested.some((url) => /launch-lab/i.test(url))).toBe(false);
 });
 
 test('Pickaxe practice does not fetch Hookline client', async ({ page }) => {
@@ -49,4 +58,17 @@ test('Pickaxe practice does not fetch Hookline client', async ({ page }) => {
   await expect(page.getByTestId('pickaxe-stage')).toBeVisible();
   await expect(page.getByTestId('countdown')).toBeVisible({ timeout: 60_000 });
   expect(requested.some((url) => /hookline/i.test(url))).toBe(false);
+});
+
+test('Launch Lab practice does not fetch Hookline or Pickaxe clients', async ({ page }) => {
+  const requested: string[] = [];
+  page.on('request', (req) => {
+    requested.push(req.url());
+  });
+  await page.goto('/play/launch-lab');
+  await expect(page.getByTestId('instructions')).toContainText('Drag to set aim');
+  await expect(page.getByTestId('launch-lab-stage')).toBeVisible();
+  await expect(page.getByTestId('countdown')).toBeVisible({ timeout: 60_000 });
+  expect(requested.some((url) => /hookline/i.test(url))).toBe(false);
+  expect(requested.some((url) => /pickaxe/i.test(url))).toBe(false);
 });

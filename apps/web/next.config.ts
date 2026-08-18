@@ -14,6 +14,7 @@ const nextConfig: NextConfig = {
     '@stickworld/ui',
     '@stickworld/game-hookline-sprint',
     '@stickworld/game-pickaxe-ascent',
+    '@stickworld/game-launch-lab',
     'phaser',
   ],
   serverExternalPackages: ['pg', 'drizzle-orm'],
