@@ -15,6 +15,8 @@ export default tseslint.config(
       'Developing a Web-Based Stickman Tournament Platform/**',
       '.kiro/**',
       '**/conformance/page/harness.js',
+      '**/.next/**',
+      'apps/web/next-env.d.ts',
     ],
   },
   eslint.configs.recommended,
