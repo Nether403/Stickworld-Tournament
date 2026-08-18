@@ -1500,11 +1500,12 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
       .where(
         and(eq(rankingSnapshots.seasonId, season.id), eq(rankingSnapshots.frozen, false)),
       );
-    for (const snapshot of liveSnapshots) {
-      const rows = (snapshot.payload as { rows: Array<{ userId: string; handle: string | null }> })
-        .rows;
-      expect(rows.find((row) => row.userId === target.userId)?.handle).toBeNull();
-    }
+    const targetSnapshotRows = liveSnapshots.flatMap(
+      (snapshot) =>
+        (snapshot.payload as { rows: Array<{ userId: string; handle: string | null }> }).rows,
+    ).filter((row) => row.userId === target.userId);
+    expect(targetSnapshotRows).toHaveLength(2);
+    expect(targetSnapshotRows.every((row) => row.handle === null)).toBe(true);
   });
 
   it('overlays a force-released handle on frozen rankings without changing snapshot bytes', async () => {
