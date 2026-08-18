@@ -40,26 +40,75 @@ export async function exportUserData(
     db.select().from(auditEvents).where(eq(auditEvents.actor, userId)),
   ]);
   return {
-    profile,
+    profile: {
+      userId: profile.userId,
+      authUserId: profile.authUserId,
+      handle: profile.handle,
+      handleClaimedAt: profile.handleClaimedAt,
+      handleChangedAt: profile.handleChangedAt,
+      status: profile.status,
+      role: profile.role,
+      email: profile.email,
+      createdAt: profile.createdAt,
+    },
     attempts: attemptRows.map((row) => ({
-      ...row,
+      id: row.id,
+      userId: row.userId,
+      seasonGameId: row.seasonGameId,
+      gameVersionId: row.gameVersionId,
       seed: Buffer.from(row.seed).toString('base64'),
       nonce: Buffer.from(row.nonce).toString('base64'),
+      issuedAt: row.issuedAt,
+      expiresAt: row.expiresAt,
+      status: row.status,
+      consumedAt: row.consumedAt,
+      createdAt: row.createdAt,
     })),
     runs: runRows.map((row) => ({
-      ...row,
+      id: row.id,
+      attemptId: row.attemptId,
+      userId: row.userId,
       claimedScore: row.claimedScore.toString(),
+      totalTicks: row.totalTicks,
       replay: Buffer.from(row.replay).toString('base64'),
       finalStateHash: Buffer.from(row.finalStateHash).toString('hex'),
+      createdAt: row.createdAt,
     })),
-    verifiedResults: resultRows.map((row) => ({ ...row, score: row.score.toString() })),
-    reportsFiled: reportRows.map(({ reporterIpHash: _reporterIpHash, ...row }) => row),
-    auditEvents: auditRows,
+    verifiedResults: resultRows.map((row) => ({
+      id: row.id,
+      userId: row.userId,
+      seasonGameId: row.seasonGameId,
+      runId: row.runId,
+      score: row.score.toString(),
+      tiebreakMetrics: row.tiebreakMetrics,
+      achievedAt: row.achievedAt,
+      createdAt: row.createdAt,
+    })),
+    reportsFiled: reportRows.map((row) => ({
+      id: row.id,
+      reporterUserId: row.reporterUserId,
+      reasonCode: row.reasonCode,
+      status: row.status,
+      createdAt: row.createdAt,
+    })),
+    auditEvents: auditRows.map((row) => ({
+      id: row.id,
+      actor: row.actor,
+      action: row.action,
+      createdAt: row.createdAt,
+    })),
   };
 }
 
 function isUniqueViolation(error: unknown): boolean {
-  return Boolean(error && typeof error === 'object' && 'code' in error && error.code === '23505');
+  const seen = new Set<object>();
+  let current = error;
+  while (current && typeof current === 'object' && !seen.has(current)) {
+    seen.add(current);
+    if ('code' in current && current.code === '23505') return true;
+    current = 'cause' in current ? current.cause : undefined;
+  }
+  return false;
 }
 
 export async function anonymiseProfile(
