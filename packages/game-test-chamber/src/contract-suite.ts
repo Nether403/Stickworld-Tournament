@@ -42,9 +42,9 @@ export async function assertSameSeedSameScore(
   game: StickworldGame,
   seed: Seed128 = [11, 22, 33, 44],
   ticks = 180,
+  inputs: readonly { tick: number; actionId: number; value: number }[] = sampleInputs(game),
 ): Promise<{ score: number; hash: string }> {
   const rapier = await initRapier();
-  const inputs = sampleInputs(game);
   const a = runAttempt(game, { seed, rapier, prng: new Prng(seed) }, inputs, ticks);
   const b = runAttempt(game, { seed, rapier, prng: new Prng(seed) }, inputs, ticks);
   if (a.score !== b.score || a.hash !== b.hash) {
@@ -62,12 +62,19 @@ export async function assertReplayRoundTrip(
   game: StickworldGame,
   seed: Seed128 = [5, 6, 7, 8],
   ticks = 120,
+  inputs?: readonly { tick: number; actionId: number; value: number }[],
 ): Promise<{ score: number; hash: string; bytes: Uint8Array }> {
   const rapier = await initRapier();
   const sim = game.createSimulation({ seed, rapier, prng: new Prng(seed) });
   const recorder = new Recorder(game.manifest.actions);
-  const actionId = firstActionId(game);
-  recorder.record(12, actionId, 1);
+  if (inputs) {
+    for (const input of inputs) {
+      recorder.record(input.tick, input.actionId, input.value);
+    }
+  } else {
+    const actionId = firstActionId(game);
+    recorder.record(12, actionId, 1);
+  }
   const events = recorder.snapshot();
   let eventIndex = 0;
   for (let t = 0; t < ticks; t++) {

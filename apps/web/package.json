@@ -8,15 +8,20 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node -e \"process.exit(0)\""
+    "test": "node -e \"process.exit(0)\"",
+    "e2e": "playwright test --config playwright.config.ts"
   },
   "dependencies": {
     "@neondatabase/auth": "0.5.0-beta",
     "@stickworld/db": "workspace:*",
     "@stickworld/platform": "workspace:*",
+    "@stickworld/game-host": "workspace:*",
+    "@stickworld/game-hookline-sprint": "workspace:*",
+    "@stickworld/sim-core": "workspace:*",
     "next": "16.3.1",
     "pg": "8.23.0",
     "drizzle-orm": "0.45.2",
+    "phaser": "4.2.1",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
@@ -25,6 +30,7 @@
     "@types/pg": "8.23.1",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.4",
+    "@playwright/test": "1.62.1",
     "typescript": "5.9.3"
   }
 }
