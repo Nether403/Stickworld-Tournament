@@ -28,7 +28,12 @@ Task 2 must not regenerate those files.
 - `movingPlatformX` / `stepMovingPlatform` — Pogo Tower kinematic movers (`detmath.sin`)
 - Pickaxe v1 must not consume movers (hash stays `6b03896db5837763`)
 
+## Spec 4 Wave C
+
+- `createKinematicCharacter` / `stepCharacterController` / `setCuboidHalfExtents` — Rooftop Relay
+- `createWheelAssembly` (spring rest 0.32 m; prismatic would lock wheel spin) — Balance Bike
+- `createCargoCondition` integer 0–100 — Cargo Chaos
+
 ## Later waves (not yet in this package until a consumer proves them)
 
-Wheels, breakables, and kinematic character controllers wait for their first
-Spec 4 consumer. Ragdoll is Wave A (`createTenBodyRagdoll`). Movers are Wave B.
+Breakables wait for Demolition Dive.

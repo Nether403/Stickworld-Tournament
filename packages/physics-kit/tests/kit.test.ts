@@ -14,6 +14,13 @@ import {
   createRevoluteJoint,
   createTenBodyRagdoll,
   createRopeJoint,
+  createWheelAssembly,
+  createCargoCondition,
+  damageCargoHazard,
+  damageCargoSpeed,
+  createKinematicCharacter,
+  stepCharacterController,
+  setCuboidHalfExtents,
   launchImpulse,
   movingPlatformX,
   resetDynamicPose,
@@ -59,6 +66,21 @@ describe('physics-kit factories', () => {
     setKinematicAngle(kin.body, 45);
     expect(movingPlatformX(5, 0.5, 120, 0)).toBe(5);
     stepMovingPlatform(kin.body, 1, 2, 0.5, 120, 30);
+    const character = createKinematicCharacter(sim, rapier, 0, 3, 0.18, 0.45, tags, 'runner');
+    setCuboidHalfExtents(character.collider, 0.18, 0.22);
+    const moved = stepCharacterController(character.controller, character.body, character.collider, {
+      x: 0.05,
+      y: -0.1,
+    });
+    expect(typeof moved.grounded).toBe('boolean');
+    character.controller.free();
+    const wheels = createWheelAssembly(sim, rapier, 2, 2, tags);
+    expect(wheels.joints).toBe(3);
+    const cargo = createCargoCondition(100);
+    damageCargoSpeed(cargo, 7, 10);
+    expect(cargo.value).toBe(99);
+    damageCargoHazard(cargo, 15);
+    expect(cargo.value).toBe(84);
     const ragdoll = createTenBodyRagdoll(sim, rapier, tags, 2, 1.4, true);
     expect(sim.registry.count()).toBeGreaterThanOrEqual(10);
     expect(ragdoll.joints).toBe(9);

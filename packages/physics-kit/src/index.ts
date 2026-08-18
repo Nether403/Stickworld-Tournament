@@ -252,6 +252,169 @@ export function setKinematicAngle(
   body.setNextKinematicRotation(degreesToRadians(degrees));
 }
 
+export type CharacterControllerHandle = {
+  computeColliderMovement: (collider: never, desired: { x: number; y: number }) => void;
+  computedMovement: () => { x: number; y: number };
+  computedGrounded: () => boolean;
+  numComputedCollisions: () => number;
+  setUp: (v: { x: number; y: number }) => void;
+  setSlideEnabled: (enabled: boolean) => void;
+  enableSnapToGround: (distance: number) => void;
+  free: () => void;
+};
+
+/** Kinematic cuboid + Rapier character controller. Gravity is integrated by the caller. */
+export function createKinematicCharacter(
+  sim: SimWorld,
+  rapier: RapierModule,
+  x: number,
+  y: number,
+  hx: number,
+  hy: number,
+  tags: ColliderTags,
+  name: string,
+) {
+  const body = sim.createRigidBody(
+    rapier.RigidBodyDesc.kinematicPositionBased().setTranslation(x, y).lockRotations(),
+  );
+  const collider = sim.world.createCollider(rapier.ColliderDesc.cuboid(hx, hy), body);
+  tagCollider(tags, collider, name);
+  const controller = sim.world.createCharacterController(0.01) as unknown as CharacterControllerHandle;
+  controller.setUp({ x: 0, y: 1 });
+  controller.setSlideEnabled(true);
+  controller.enableSnapToGround(0.2);
+  return { body, collider, controller };
+}
+
+export function setCuboidHalfExtents(
+  collider: { setHalfExtents: (he: { x: number; y: number }) => void },
+  hx: number,
+  hy: number,
+): void {
+  collider.setHalfExtents({ x: hx, y: hy });
+}
+
+export function stepCharacterController(
+  controller: CharacterControllerHandle,
+  body: {
+    translation: () => { x: number; y: number };
+    setNextKinematicTranslation: (t: { x: number; y: number }) => void;
+  },
+  collider: { handle: number },
+  desired: { x: number; y: number },
+): { grounded: boolean; collisions: number } {
+  controller.computeColliderMovement(collider as never, desired);
+  const mv = controller.computedMovement();
+  const pos = body.translation();
+  body.setNextKinematicTranslation({ x: pos.x + mv.x, y: pos.y + mv.y });
+  return { grounded: controller.computedGrounded(), collisions: controller.numComputedCollisions() };
+}
+
+export function createDynamicBall(
+  sim: SimWorld,
+  rapier: RapierModule,
+  x: number,
+  y: number,
+  radius: number,
+  mass: number,
+  tags: ColliderTags,
+  name: string,
+) {
+  const body = sim.createRigidBody(rapier.RigidBodyDesc.dynamic().setTranslation(x, y));
+  const collider = sim.world.createCollider(
+    rapier.ColliderDesc.ball(radius).setMass(mass).setFriction(1.4),
+    body,
+  );
+  tagCollider(tags, collider, name);
+  return { body, collider };
+}
+
+export function createFixedCuboidRotated(
+  sim: SimWorld,
+  rapier: RapierModule,
+  x: number,
+  y: number,
+  hx: number,
+  hy: number,
+  angleRadians: number,
+  tags: ColliderTags,
+  name: string,
+) {
+  const body = sim.createRigidBody(
+    rapier.RigidBodyDesc.fixed().setTranslation(x, y).setRotation(angleRadians),
+  );
+  const collider = sim.world.createCollider(rapier.ColliderDesc.cuboid(hx, hy), body);
+  tagCollider(tags, collider, name);
+  return { body, collider };
+}
+
+export function createSpringJoint(
+  world: SimWorld['world'],
+  rapier: RapierModule,
+  bodyA: ReturnType<SimWorld['createRigidBody']>,
+  bodyB: ReturnType<SimWorld['createRigidBody']>,
+  restLength: number,
+  stiffness: number,
+  damping: number,
+  localA: { x: number; y: number } = { x: 0, y: 0 },
+  localB: { x: number; y: number } = { x: 0, y: 0 },
+): ReturnType<SimWorld['world']['createImpulseJoint']> {
+  return world.createImpulseJoint(
+    rapier.JointData.spring(restLength, stiffness, damping, localA, localB),
+    bodyA,
+    bodyB,
+    true,
+  );
+}
+
+/** Frame + two wheels + rider. Prismatic would lock wheel spin; v1 uses spring distance rest. */
+export function createWheelAssembly(
+  sim: SimWorld,
+  rapier: RapierModule,
+  x: number,
+  y: number,
+  tags: ColliderTags,
+) {
+  const frame = createDynamicCuboid(sim, rapier, x, y, 0.275, 0.04, 12, tags, 'frame');
+  const rear = createDynamicBall(sim, rapier, x - 0.28, y - 0.32, 0.28, 2, tags, 'wheel-r');
+  const front = createDynamicBall(sim, rapier, x + 0.28, y - 0.32, 0.28, 2, tags, 'wheel-f');
+  const rider = createDynamicCapsule(sim, rapier, x, y + 0.42, 0.28, 0.16, 40, 0.04, tags, 'rider');
+  createFixedJoint(sim.world, rapier, frame.body, rider.body, { x: 0, y: 0.2 }, { x: 0, y: -0.2 });
+  createSpringJoint(sim.world, rapier, frame.body, rear.body, 0.32, 500, 18, { x: -0.28, y: 0 }, { x: 0, y: 0 });
+  createSpringJoint(sim.world, rapier, frame.body, front.body, 0.32, 500, 18, { x: 0.28, y: 0 }, { x: 0, y: 0 });
+  return { frame, rear, front, rider, joints: 3 };
+}
+
+export interface CargoCondition {
+  value: number;
+  lastSpeedDamageTick: number;
+}
+
+export function createCargoCondition(start = 100): CargoCondition {
+  return { value: start, lastSpeedDamageTick: -1000 };
+}
+
+export function damageCargoSpeed(
+  state: CargoCondition,
+  speed: number,
+  tick: number,
+  speedLimit = 6,
+  interval = 10,
+): void {
+  if (state.value <= 0) return;
+  if (speed > speedLimit && tick - state.lastSpeedDamageTick >= interval) {
+    state.value -= 1;
+    if (state.value < 0) state.value = 0;
+    state.lastSpeedDamageTick = tick;
+  }
+}
+
+export function damageCargoHazard(state: CargoCondition, amount = 15): void {
+  if (state.value <= 0) return;
+  state.value -= amount;
+  if (state.value < 0) state.value = 0;
+}
+
 export function castTaggedRay(
   world: SimWorld['world'],
   rapier: RapierModule,
