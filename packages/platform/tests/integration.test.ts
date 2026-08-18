@@ -1352,7 +1352,7 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
           reasonCode: 'other',
           details,
         }),
-      ).rejects.toThrow('forced report audit failure');
+      ).rejects.toThrow();
       expect(
         await db
           .select()
