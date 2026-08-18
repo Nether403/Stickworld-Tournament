@@ -22,6 +22,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: node scripts/check-forbidden-names.mjs
+      - run: node --test scripts/asset-pipeline.test.mjs
       - run: node scripts/check-asset-ledger.mjs
       - run: node scripts/check-game-integration.mjs
       - run: pnpm build

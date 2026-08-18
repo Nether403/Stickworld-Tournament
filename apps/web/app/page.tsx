@@ -19,12 +19,13 @@ export default async function HomePage(): Promise<ReactNode> {
 
   return (
     <main>
-      <header>
+      <header style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
         <Image
           src="/assets/brand/logo.svg"
           alt="Stickworld Tournament logo"
           width={72}
           height={72}
+          style={{ maxWidth: '100%', height: 'auto' }}
           priority
         />
         <Image
@@ -32,6 +33,7 @@ export default async function HomePage(): Promise<ReactNode> {
           alt="Stickworld Tournament wordmark"
           width={420}
           height={72}
+          style={{ maxWidth: '100%', height: 'auto', minWidth: 0 }}
           priority
         />
       </header>

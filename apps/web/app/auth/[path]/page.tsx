@@ -15,12 +15,13 @@ export default function AuthPage() {
   return (
     <main>
       <header>
-        <Link href="/">
+        <Link href="/" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
           <Image
             src="/assets/brand/logo.svg"
             alt="Stickworld Tournament logo"
             width={64}
             height={64}
+            style={{ maxWidth: '100%', height: 'auto' }}
             priority
           />
           <Image
@@ -28,6 +29,7 @@ export default function AuthPage() {
             alt="Stickworld Tournament wordmark"
             width={350}
             height={60}
+            style={{ maxWidth: '100%', height: 'auto', minWidth: 0 }}
             priority
           />
         </Link>

@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator } from '@playwright/test';
 
 const BANNED_AI_HOSTS = new Set([
   'generativelanguage.googleapis.com',
@@ -6,10 +6,27 @@ const BANNED_AI_HOSTS = new Set([
   'openrouter.ai',
 ]);
 
+async function expectWithinViewport(locator: Locator) {
+  const bounds = await locator.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return {
+      left: rect.left,
+      right: rect.right,
+      viewportWidth: document.documentElement.clientWidth,
+    };
+  });
+  expect(bounds.left).toBeGreaterThanOrEqual(0);
+  expect(bounds.right).toBeLessThanOrEqual(bounds.viewportWidth);
+}
+
 test('catalogue lists live games through Demolition Dive, not Test Chamber', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByAltText('Stickworld Tournament logo')).toBeVisible();
-  await expect(page.getByAltText('Stickworld Tournament wordmark')).toBeVisible();
+  const logo = page.getByAltText('Stickworld Tournament logo');
+  const wordmark = page.getByAltText('Stickworld Tournament wordmark');
+  await expect(logo).toBeVisible();
+  await expect(wordmark).toBeVisible();
+  await expectWithinViewport(logo);
+  await expectWithinViewport(wordmark);
   await expect(page.getByRole('heading', { name: 'Hookline Sprint' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Pickaxe Ascent' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Launch Lab' })).toBeVisible();
@@ -26,8 +43,12 @@ test('catalogue lists live games through Demolition Dive, not Test Chamber', asy
 
 test('auth offers Google and email, not GitHub', async ({ page }) => {
   await page.goto('/auth/sign-in');
-  await expect(page.getByAltText('Stickworld Tournament logo')).toBeVisible();
-  await expect(page.getByAltText('Stickworld Tournament wordmark')).toBeVisible();
+  const logo = page.getByAltText('Stickworld Tournament logo');
+  const wordmark = page.getByAltText('Stickworld Tournament wordmark');
+  await expect(logo).toBeVisible();
+  await expect(wordmark).toBeVisible();
+  await expectWithinViewport(logo);
+  await expectWithinViewport(wordmark);
   await expect(page.getByRole('button', { name: 'Continue with Google' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Sign in with email' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Create account' })).toBeVisible();

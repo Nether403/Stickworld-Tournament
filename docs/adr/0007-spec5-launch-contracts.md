@@ -139,7 +139,7 @@ Post-merge product facts (2026-08-18):
 
 - Spec 5 tasks can name files, tables, routes, header names, budget numbers,
   and season slugs.
-- Owner approval of this ADR is required before Task 1 implementation.
+- Owner approved 2026-08-18. Task 1 may proceed.
 - Legal counsel and trademark clearance still gate **public** Season 1, not
   the internal season.
 - PR #4 review leftovers (presentation vs collider mismatch, some cubic
