@@ -93,3 +93,15 @@ maxJoints: 8
 maxReplayBytes: 40960
 maxScoreEvents: 768
 ```
+
+---
+
+## Kit finding log
+
+Prismatic wheel–frame joints lock spin. v1 uses spring distance joints at rest
+`0.32` m and rear-wheel torque (negative for +x). Ramps are fixed cuboids with
+construction rotation, not movers.
+
+Sample freeze: score **2**, hash **`d0f9ba8f42355fbb`**, `SAMPLE_TICKS` 480.
+150 s record-on-change synthetic is asserted in `tests/contract.test.ts` before
+the Phaser scene. Real mid-range Android frame-time is a demo gate, not CI.

@@ -139,6 +139,60 @@ export default async function HomePage(): Promise<ReactNode> {
             )}
           </p>
         </article>
+        <article>
+          <h2>Rooftop Relay</h2>
+          <p>Jump and slide a kinematic runner across authored roofs.</p>
+          <p>
+            <Link href="/play/rooftop-relay">Practice</Link>
+            {signedIn ? (
+              <>
+                {' '}
+                <Link href="/play/rooftop-relay?mode=ranked">Ranked</Link>
+              </>
+            ) : (
+              <>
+                {' '}
+                <Link href="/auth/sign-in">Sign in to play ranked</Link>
+              </>
+            )}
+          </p>
+        </article>
+        <article>
+          <h2>Balance Bike Blitz</h2>
+          <p>Throttle, brake, and lean a two-wheel assembly over static ramps.</p>
+          <p>
+            <Link href="/play/balance-bike-blitz">Practice</Link>
+            {signedIn ? (
+              <>
+                {' '}
+                <Link href="/play/balance-bike-blitz?mode=ranked">Ranked</Link>
+              </>
+            ) : (
+              <>
+                {' '}
+                <Link href="/auth/sign-in">Sign in to play ranked</Link>
+              </>
+            )}
+          </p>
+        </article>
+        <article>
+          <h2>Cargo Chaos</h2>
+          <p>Hook between posts while a jointed crate keeps its integer condition.</p>
+          <p>
+            <Link href="/play/cargo-chaos">Practice</Link>
+            {signedIn ? (
+              <>
+                {' '}
+                <Link href="/play/cargo-chaos?mode=ranked">Ranked</Link>
+              </>
+            ) : (
+              <>
+                {' '}
+                <Link href="/auth/sign-in">Sign in to play ranked</Link>
+              </>
+            )}
+          </p>
+        </article>
       </section>
     </main>
   );

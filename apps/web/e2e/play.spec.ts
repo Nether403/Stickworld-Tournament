@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('catalogue lists Hookline, Pickaxe, Launch Lab, Archery, Hammer, and Pogo live, not Test Chamber', async ({ page }) => {
+test('catalogue lists live games through Cargo Chaos, not Test Chamber', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Hookline Sprint' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Pickaxe Ascent' })).toBeVisible();
@@ -8,6 +8,9 @@ test('catalogue lists Hookline, Pickaxe, Launch Lab, Archery, Hammer, and Pogo l
   await expect(page.getByRole('heading', { name: 'Ragdoll Archery Rush' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Hammer Throw Havoc' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Pogo Tower' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Rooftop Relay' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Balance Bike Blitz' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Cargo Chaos' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Practice' }).first()).toBeVisible();
   await expect(page.getByText('Test Chamber')).toHaveCount(0);
 });
@@ -124,4 +127,47 @@ test('Pogo practice does not fetch Hammer client', async ({ page }) => {
   await expect(page.getByTestId('pogo-stage')).toBeVisible();
   await expect(page.getByTestId('countdown')).toBeVisible({ timeout: 60_000 });
   expect(requested.some((url) => /hammer-throw/i.test(url))).toBe(false);
+});
+
+test('ranked Rooftop issue without a session is 401', async ({ request }) => {
+  const res = await request.post('/v1/games/rooftop-relay/attempts', {
+    data: { seedPolicy: 'fixed-course' },
+  });
+  expect(res.status()).toBe(401);
+});
+
+test('Rooftop practice does not fetch Pogo client', async ({ page }) => {
+  const requested: string[] = [];
+  page.on('request', (req) => {
+    requested.push(req.url());
+  });
+  await page.goto('/play/rooftop-relay');
+  await expect(page.getByTestId('instructions')).toContainText('Hold Right to run');
+  await expect(page.getByTestId('rooftop-stage')).toBeVisible();
+  await expect(page.getByTestId('countdown')).toBeVisible({ timeout: 60_000 });
+  expect(requested.some((url) => /pogo-tower/i.test(url))).toBe(false);
+});
+
+test('Bike practice does not fetch Rooftop client', async ({ page }) => {
+  const requested: string[] = [];
+  page.on('request', (req) => {
+    requested.push(req.url());
+  });
+  await page.goto('/play/balance-bike-blitz');
+  await expect(page.getByTestId('instructions')).toContainText('Hold Right to throttle');
+  await expect(page.getByTestId('bike-stage')).toBeVisible();
+  await expect(page.getByTestId('countdown')).toBeVisible({ timeout: 60_000 });
+  expect(requested.some((url) => /rooftop-relay/i.test(url))).toBe(false);
+});
+
+test('Cargo practice does not fetch Bike client', async ({ page }) => {
+  const requested: string[] = [];
+  page.on('request', (req) => {
+    requested.push(req.url());
+  });
+  await page.goto('/play/cargo-chaos');
+  await expect(page.getByTestId('instructions')).toContainText('Aim with the pointer');
+  await expect(page.getByTestId('cargo-stage')).toBeVisible();
+  await expect(page.getByTestId('countdown')).toBeVisible({ timeout: 60_000 });
+  expect(requested.some((url) => /balance-bike/i.test(url))).toBe(false);
 });

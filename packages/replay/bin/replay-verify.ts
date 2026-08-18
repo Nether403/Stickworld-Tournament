@@ -73,6 +73,33 @@ async function loadGame(registryId: number): Promise<StickworldGame | undefined>
       return undefined;
     }
   }
+  if (registryId === 7) {
+    const url = new URL('../../../../games/rooftop-relay/dist/index.js', import.meta.url);
+    try {
+      const mod = (await import(url.href)) as { rooftopRelayGame: StickworldGame };
+      return mod.rooftopRelayGame;
+    } catch {
+      return undefined;
+    }
+  }
+  if (registryId === 8) {
+    const url = new URL('../../../../games/balance-bike-blitz/dist/index.js', import.meta.url);
+    try {
+      const mod = (await import(url.href)) as { balanceBikeBlitzGame: StickworldGame };
+      return mod.balanceBikeBlitzGame;
+    } catch {
+      return undefined;
+    }
+  }
+  if (registryId === 9) {
+    const url = new URL('../../../../games/cargo-chaos/dist/index.js', import.meta.url);
+    try {
+      const mod = (await import(url.href)) as { cargoChaosGame: StickworldGame };
+      return mod.cargoChaosGame;
+    } catch {
+      return undefined;
+    }
+  }
   return undefined;
 }
 

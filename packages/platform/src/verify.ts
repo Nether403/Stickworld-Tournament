@@ -17,6 +17,9 @@ import { launchLabGame } from '@stickworld/game-launch-lab';
 import { ragdollArcheryRushGame } from '@stickworld/game-ragdoll-archery-rush';
 import { hammerThrowHavocGame } from '@stickworld/game-hammer-throw-havoc';
 import { pogoTowerGame } from '@stickworld/game-pogo-tower';
+import { rooftopRelayGame } from '@stickworld/game-rooftop-relay';
+import { balanceBikeBlitzGame } from '@stickworld/game-balance-bike-blitz';
+import { cargoChaosGame } from '@stickworld/game-cargo-chaos';
 import { decodeReplay, packGameVersion, type ReplayHeader } from '@stickworld/replay';
 import {
   BudgetExceededError,
@@ -42,6 +45,9 @@ const GAMES = new Map<number, StickworldGame>([
   [4, ragdollArcheryRushGame],
   [5, hammerThrowHavocGame],
   [6, pogoTowerGame],
+  [7, rooftopRelayGame],
+  [8, balanceBikeBlitzGame],
+  [9, cargoChaosGame],
 ]);
 
 function hexPrefix(hex: string): Buffer {

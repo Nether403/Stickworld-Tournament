@@ -78,17 +78,17 @@ hashes; tiny replay; lazy-load; legal grep.
 
 **Objective:** longest runs; kit gains controller, wheels, cargo condition.
 
-- [ ] 3.1 **Before Phaser:** for each of the three games, a 150 s
+- [x] 3.1 **Before Phaser:** for each of the three games, a 150 s
       record-on-change synthetic replay ≤ 40_960 bytes. If it fails, coarsen
       that game's action table only and log it. _(R3.1)_
-- [ ] 3.2 Kinematic character controller in `physics-kit` + fixture. Rooftop
+- [x] 3.2 Kinematic character controller in `physics-kit` + fixture. Rooftop
       Relay sim from `docs/games/rooftop-relay.md`. Stumble flag is
       presentation. Goldens, client, seed `registry_id = 7`. _(R3.2)_
-- [ ] 3.3 Wheel assembly + suspension in `physics-kit` + fixture. Balance Bike
+- [x] 3.3 Wheel assembly + suspension in `physics-kit` + fixture. Balance Bike
       Blitz sim + goldens + client + seed `registry_id = 8`. _(R3.3)_
-- [ ] 3.4 Jointed cargo + integer condition. Cargo Chaos sim + goldens +
+- [x] 3.4 Jointed cargo + integer condition. Cargo Chaos sim + goldens +
       client + seed `registry_id = 9`. _(R3.4)_
-- [ ] 3.5 Playwright lazy-load for all three slugs. Catalogue. Demo-gate note
+- [x] 3.5 Playwright lazy-load for all three slugs. Catalogue. Demo-gate note
       for real Android frame-time (not CI). _(R3.5, R3.6)_
 
 **Demo:** nine games live. Medium replay assertions green.

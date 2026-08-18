@@ -98,3 +98,15 @@ maxScoreEvents: 768
 ```
 
 150 s synthetic record-on-change MUST be written before the Phaser scene.
+
+---
+
+## Kit finding log
+
+Stumble is `renderState.stumbled` for 20 ticks after a lintel graze. Slide
+resizes the same cuboid (`setHalfExtents`) and shifts y so the feet stay put.
+No new bodies. Gravity is integrated in the controller (`GRAVITY_Y * TIMESTEP`).
+
+Sample freeze: score **1103**, hash **`7e2dc106b92d0b28`**, `SAMPLE_TICKS` 480.
+150 s record-on-change synthetic is asserted in `tests/contract.test.ts` before
+the Phaser scene. Real mid-range Android frame-time is a demo gate, not CI.

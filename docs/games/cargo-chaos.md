@@ -87,3 +87,15 @@ maxJoints: 4
 maxReplayBytes: 40960
 maxScoreEvents: 512
 ```
+
+---
+
+## Kit finding log
+
+The crate hitch sits on the aim ray to post 1, so a physics raycast hits the
+crate first. v1 attaches to the nearest in-range post inside the aim cone
+(dot ≥ 0.7). No extra bodies.
+
+Sample freeze: score **16**, hash **`7bd2d9b1fb4c791a`**, `SAMPLE_TICKS` 360.
+150 s record-on-change synthetic is asserted in `tests/contract.test.ts` before
+the Phaser scene. Real mid-range Android frame-time is a demo gate, not CI.

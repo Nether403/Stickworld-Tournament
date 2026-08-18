@@ -1,0 +1,40 @@
+{
+  "name": "@stickworld/game-balance-bike-blitz",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./client": {
+      "types": "./dist/client/index.d.ts",
+      "import": "./dist/client/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "score:bundle": "esbuild conformance/runner-browser.ts --bundle --format=iife --outfile=conformance/page/harness.js --alias:@stickworld/sim-core=../../packages/sim-core/src/index.ts --alias:@stickworld/replay=../../packages/replay/src/index.ts --alias:@stickworld/physics-kit=../../packages/physics-kit/src/index.ts --alias:@stickworld/scoring=../../packages/scoring/src/index.ts",
+    "score:browser": "pnpm score:bundle && playwright test --config playwright.config.ts"
+  },
+  "dependencies": {
+    "@stickworld/game-host": "workspace:*",
+    "@stickworld/physics-kit": "workspace:*",
+    "@stickworld/replay": "workspace:*",
+    "@stickworld/scoring": "workspace:*",
+    "@stickworld/input": "workspace:*",
+    "@stickworld/sim-core": "workspace:*",
+    "phaser": "4.2.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.62.1",
+    "@stickworld/config-ts": "workspace:*",
+    "@stickworld/game-test-chamber": "workspace:*",
+    "esbuild": "0.28.2",
+    "typescript": "5.9.3",
+    "vitest": "3.2.7"
+  }
+}
