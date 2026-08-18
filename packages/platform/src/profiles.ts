@@ -6,10 +6,16 @@ import { normalizeHandle } from './handle.js';
 import { audit } from './audit.js';
 import type { Clock } from './context.js';
 
-export async function upsertProfile(db: Database, authUserId: string): Promise<{
+export async function upsertProfile(
+  db: Database,
+  authUserId: string,
+  email?: string | null,
+): Promise<{
   userId: string;
   handle: string | null;
-  status: 'active' | 'suspended';
+  status: 'active' | 'suspended' | 'anonymised';
+  role: 'player' | 'moderator';
+  email: string | null;
 }> {
   const existing = await db
     .select()
@@ -17,30 +23,64 @@ export async function upsertProfile(db: Database, authUserId: string): Promise<{
     .where(eq(profiles.authUserId, authUserId))
     .then((rows) => rows[0]);
   if (existing) {
-    return { userId: existing.userId, handle: existing.handle, status: existing.status };
+    if (email != null && email !== existing.email) {
+      const updated = await db
+        .update(profiles)
+        .set({ email })
+        .where(eq(profiles.userId, existing.userId))
+        .returning()
+        .then((rows) => rows[0]);
+      if (updated) {
+        return {
+          userId: updated.userId,
+          handle: updated.handle,
+          status: updated.status,
+          role: updated.role,
+          email: updated.email,
+        };
+      }
+    }
+    return {
+      userId: existing.userId,
+      handle: existing.handle,
+      status: existing.status,
+      role: existing.role,
+      email: existing.email,
+    };
   }
   const inserted = await db
     .insert(profiles)
-    .values({ authUserId })
+    .values({ authUserId, email: email ?? undefined })
     .onConflictDoNothing()
     .returning();
   const row =
     inserted[0] ??
-    (await db.select().from(profiles).where(eq(profiles.authUserId, authUserId)).then((r) => r[0]));
+    (await db
+      .select()
+      .from(profiles)
+      .where(eq(profiles.authUserId, authUserId))
+      .then((r) => r[0]));
   if (!row) throw new ApiError('INTERNAL');
   await audit(db, { actor: row.userId, action: 'profile.upsert', target: row.userId });
-  return { userId: row.userId, handle: row.handle, status: row.status };
+  return {
+    userId: row.userId,
+    handle: row.handle,
+    status: row.status,
+    role: row.role,
+    email: row.email,
+  };
 }
 
 export async function requireRankedUser(
   db: Database,
   authUserId: string | undefined,
-): Promise<{ userId: string; handle: string }> {
+  email?: string | null,
+): Promise<{ userId: string; handle: string; email: string | null }> {
   if (!authUserId) throw new ApiError('UNAUTHENTICATED');
-  const profile = await upsertProfile(db, authUserId);
+  const profile = await upsertProfile(db, authUserId, email);
   if (profile.status !== 'active') throw new ApiError('FORBIDDEN');
   if (!profile.handle) throw new ApiError('UNAUTHENTICATED');
-  return { userId: profile.userId, handle: profile.handle };
+  return { userId: profile.userId, handle: profile.handle, email: profile.email };
 }
 
 export async function claimHandle(
@@ -52,7 +92,11 @@ export async function claimHandle(
   const normalized = normalizeHandle(raw);
   if (!normalized.ok) throw new ApiError('HANDLE_INVALID');
   const now = clock.now();
-  const row = await db.select().from(profiles).where(eq(profiles.userId, userId)).then((r) => r[0]);
+  const row = await db
+    .select()
+    .from(profiles)
+    .where(eq(profiles.userId, userId))
+    .then((r) => r[0]);
   if (!row) throw new ApiError('UNAUTHENTICATED');
   if (row.handle === normalized.handle) return { status: 'noop', handle: normalized.handle };
   if (row.handleChangedAt) {

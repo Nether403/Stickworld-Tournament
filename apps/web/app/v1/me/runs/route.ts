@@ -1,12 +1,13 @@
 import { attempts } from '@stickworld/db';
 import { desc, eq } from 'drizzle-orm';
 import { requireRankedUser } from '@stickworld/platform';
-import { authUserId, getDb, jsonError } from '@/lib/server';
+import { authIdentity, getDb, jsonError } from '@/lib/server';
 
 export async function GET(): Promise<Response> {
   try {
     const db = getDb();
-    const user = await requireRankedUser(db, await authUserId());
+    const identity = await authIdentity();
+    const user = await requireRankedUser(db, identity.id, identity.email);
     const rows = await db
       .select()
       .from(attempts)

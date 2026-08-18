@@ -7,13 +7,7 @@ import {
 import { eq } from 'drizzle-orm';
 import { createDirectPool, createDb, type Database } from './client.js';
 import { loadWorkspaceEnv } from './env.js';
-import {
-  dailyBoards,
-  gameVersions,
-  games,
-  seasonGames,
-  seasons,
-} from './schema.js';
+import { dailyBoards, gameVersions, games, seasonGames, seasons } from './schema.js';
 
 function packSeed(seed: readonly [number, number, number, number]): Buffer {
   const out = Buffer.alloc(16);
@@ -31,7 +25,9 @@ function utcDateString(d: Date): string {
 function isoWeekMonday(d: Date): string {
   const day = d.getUTCDay();
   const offset = day === 0 ? -6 : 1 - day;
-  return utcDateString(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + offset)));
+  return utcDateString(
+    new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + offset)),
+  );
 }
 
 export async function seedGame(
@@ -54,7 +50,12 @@ export async function seedGame(
     .onConflictDoNothing()
     .returning();
   const gameRow =
-    game ?? (await db.select().from(games).where(eq(games.slug, opts.slug)).then((r) => r[0]));
+    game ??
+    (await db
+      .select()
+      .from(games)
+      .where(eq(games.slug, opts.slug))
+      .then((r) => r[0]));
   if (!gameRow) throw new Error(`failed to seed game ${opts.slug}`);
 
   const [version] = await db
@@ -74,7 +75,11 @@ export async function seedGame(
     .returning();
   const versionRow =
     version ??
-    (await db.select().from(gameVersions).where(eq(gameVersions.gameId, gameRow.id)).then((r) => r[0]));
+    (await db
+      .select()
+      .from(gameVersions)
+      .where(eq(gameVersions.gameId, gameRow.id))
+      .then((r) => r[0]));
   if (!versionRow) throw new Error(`failed to seed game_versions for ${opts.slug}`);
 
   const policies = opts.seedPolicies ?? (['fixed-course', 'daily-seed'] as const);
@@ -110,11 +115,17 @@ export async function seedDatabase(): Promise<void> {
         endsAt: far,
         status: 'active',
         rulesVersion: 1,
+        entryPolicy: 'open',
       })
       .onConflictDoNothing()
       .returning();
     const seasonRow =
-      season ?? (await db.select().from(seasons).where(eq(seasons.slug, 'ci')).then((r) => r[0]));
+      season ??
+      (await db
+        .select()
+        .from(seasons)
+        .where(eq(seasons.slug, 'ci'))
+        .then((r) => r[0]));
     if (!seasonRow) throw new Error('failed to seed season ci');
 
     await seedGame(
@@ -128,11 +139,31 @@ export async function seedDatabase(): Promise<void> {
       },
       now,
     );
-    await seedGame(db, seasonRow.id, { slug: 'hookline-sprint', registryId: 1, maxRunTicks: 5400 }, now);
-    await seedGame(db, seasonRow.id, { slug: 'pickaxe-ascent', registryId: 2, maxRunTicks: 7200 }, now);
+    await seedGame(
+      db,
+      seasonRow.id,
+      { slug: 'hookline-sprint', registryId: 1, maxRunTicks: 5400 },
+      now,
+    );
+    await seedGame(
+      db,
+      seasonRow.id,
+      { slug: 'pickaxe-ascent', registryId: 2, maxRunTicks: 7200 },
+      now,
+    );
     await seedGame(db, seasonRow.id, { slug: 'launch-lab', registryId: 3, maxRunTicks: 5400 }, now);
-    await seedGame(db, seasonRow.id, { slug: 'ragdoll-archery-rush', registryId: 4, maxRunTicks: 5400 }, now);
-    await seedGame(db, seasonRow.id, { slug: 'hammer-throw-havoc', registryId: 5, maxRunTicks: 5400 }, now);
+    await seedGame(
+      db,
+      seasonRow.id,
+      { slug: 'ragdoll-archery-rush', registryId: 4, maxRunTicks: 5400 },
+      now,
+    );
+    await seedGame(
+      db,
+      seasonRow.id,
+      { slug: 'hammer-throw-havoc', registryId: 5, maxRunTicks: 5400 },
+      now,
+    );
     await seedGame(
       db,
       seasonRow.id,
@@ -144,12 +175,35 @@ export async function seedDatabase(): Promise<void> {
       },
       now,
     );
-    await seedGame(db, seasonRow.id, { slug: 'rooftop-relay', registryId: 7, maxRunTicks: 9000 }, now);
-    await seedGame(db, seasonRow.id, { slug: 'balance-bike-blitz', registryId: 8, maxRunTicks: 9000 }, now);
-    await seedGame(db, seasonRow.id, { slug: 'cargo-chaos', registryId: 9, maxRunTicks: 9000 }, now);
-    await seedGame(db, seasonRow.id, { slug: 'demolition-dive', registryId: 10, maxRunTicks: 5400 }, now);
+    await seedGame(
+      db,
+      seasonRow.id,
+      { slug: 'rooftop-relay', registryId: 7, maxRunTicks: 9000 },
+      now,
+    );
+    await seedGame(
+      db,
+      seasonRow.id,
+      { slug: 'balance-bike-blitz', registryId: 8, maxRunTicks: 9000 },
+      now,
+    );
+    await seedGame(
+      db,
+      seasonRow.id,
+      { slug: 'cargo-chaos', registryId: 9, maxRunTicks: 9000 },
+      now,
+    );
+    await seedGame(
+      db,
+      seasonRow.id,
+      { slug: 'demolition-dive', registryId: 10, maxRunTicks: 5400 },
+      now,
+    );
 
-    const dailies = await db.select().from(seasonGames).where(eq(seasonGames.seedPolicy, 'daily-seed'));
+    const dailies = await db
+      .select()
+      .from(seasonGames)
+      .where(eq(seasonGames.seedPolicy, 'daily-seed'));
     if (dailies.length === 0) throw new Error('failed to seed daily season_games');
     const today = utcDateString(now);
     for (const daily of dailies) {
@@ -162,7 +216,10 @@ export async function seedDatabase(): Promise<void> {
         })
         .onConflictDoNothing();
     }
-    const weeklies = await db.select().from(seasonGames).where(eq(seasonGames.seedPolicy, 'weekly-seed'));
+    const weeklies = await db
+      .select()
+      .from(seasonGames)
+      .where(eq(seasonGames.seedPolicy, 'weekly-seed'));
     const monday = isoWeekMonday(now);
     for (const weekly of weeklies) {
       await db

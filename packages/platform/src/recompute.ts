@@ -1,4 +1,5 @@
 import {
+  attempts,
   gameBests,
   profiles,
   rankingDirty,
@@ -8,9 +9,14 @@ import {
   verifiedResults,
   type Database,
 } from '@stickworld/db';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, gt, inArray, sql } from 'drizzle-orm';
 import type { Clock } from './context.js';
-import { RANKING_DIRTY_FLOOR_MS, LEADERBOARD_PAGE_DEFAULT, LEADERBOARD_PAGE_MAX } from './limits.js';
+import {
+  ATTEMPT_TTL_SECONDS,
+  RANKING_DIRTY_FLOOR_MS,
+  LEADERBOARD_PAGE_DEFAULT,
+  LEADERBOARD_PAGE_MAX,
+} from './limits.js';
 import {
   championshipPoints,
   compareChampionship,
@@ -66,14 +72,12 @@ export async function markSeasonDirty(db: Database, seasonId: string, at: Date):
   await markDirty(db, seasonId, at);
 }
 
-async function loadOrderedBests(
-  db: Database,
-  seasonGameId: string,
-): Promise<LeaderboardRow[]> {
+async function loadOrderedBests(db: Database, seasonGameId: string): Promise<LeaderboardRow[]> {
   const rows = await db
     .select({
       userId: gameBests.userId,
       handle: profiles.handle,
+      profileStatus: profiles.status,
       score: gameBests.score,
       achievedAt: verifiedResults.achievedAt,
     })
@@ -81,7 +85,11 @@ async function loadOrderedBests(
     .innerJoin(verifiedResults, eq(verifiedResults.id, gameBests.verifiedResultId))
     .innerJoin(profiles, eq(profiles.userId, gameBests.userId))
     .where(eq(gameBests.seasonGameId, seasonGameId))
-    .orderBy(sql`${gameBests.score} DESC`, sql`${verifiedResults.achievedAt} ASC`, sql`${gameBests.userId} ASC`);
+    .orderBy(
+      sql`${gameBests.score} DESC`,
+      sql`${verifiedResults.achievedAt} ASC`,
+      sql`${gameBests.userId} ASC`,
+    );
 
   const ranks = rankDense((i, j) => {
     const a = rows[i]!;
@@ -92,7 +100,7 @@ async function loadOrderedBests(
   return rows.map((row, i) => ({
     rank: ranks[i]!,
     userId: row.userId,
-    handle: row.handle,
+    handle: row.profileStatus === 'anonymised' ? 'retired' : row.handle,
     score: row.score.toString(),
     achievedAt: row.achievedAt.toISOString(),
   }));
@@ -150,10 +158,7 @@ function standingsFingerprint(payload: ChampionshipPayload): string {
       games: Object.fromEntries(
         Object.entries(row.games)
           .sort(([a], [b]) => a.localeCompare(b))
-          .map(([id, g]) => [
-            id,
-            { points: g.points, rank: g.rank, provisional: g.provisional },
-          ]),
+          .map(([id, g]) => [id, { points: g.points, rank: g.rank, provisional: g.provisional }]),
       ),
     })),
   });
@@ -165,7 +170,11 @@ export async function recomputeSeason(
   seasonId: string,
   options: { force?: boolean } = {},
 ): Promise<boolean> {
-  const season = await db.select().from(seasons).where(eq(seasons.id, seasonId)).then((r) => r[0]);
+  const season = await db
+    .select()
+    .from(seasons)
+    .where(eq(seasons.id, seasonId))
+    .then((r) => r[0]);
   if (!season || season.status === 'closed') return false;
   const dirty = await db
     .select()
@@ -291,6 +300,28 @@ export async function recomputeAllDirty(db: Database, clock: Clock): Promise<voi
 }
 
 export async function closeSeason(db: Database, clock: Clock, seasonId: string): Promise<void> {
+  const season = await db
+    .select()
+    .from(seasons)
+    .where(eq(seasons.id, seasonId))
+    .then((rows) => rows[0]);
+  if (!season || season.status === 'closed') return;
+  await db.update(seasons).set({ status: 'closing' }).where(eq(seasons.id, seasonId));
+  const now = clock.now();
+  const inFlight = await db
+    .select({ id: attempts.id })
+    .from(attempts)
+    .innerJoin(seasonGames, eq(seasonGames.id, attempts.seasonGameId))
+    .where(
+      and(
+        eq(seasonGames.seasonId, seasonId),
+        inArray(attempts.status, ['issued', 'active']),
+        gt(attempts.expiresAt, now),
+        sql`${attempts.issuedAt} + (${ATTEMPT_TTL_SECONDS} * interval '1 second') > ${now}`,
+      ),
+    )
+    .limit(1);
+  if (inFlight.length > 0) return;
   await recomputeSeason(db, clock, seasonId, { force: true });
   await db
     .update(rankingSnapshots)
@@ -323,14 +354,19 @@ export async function readLeaderboard(
     .then((r) => r[0]);
   if (!snap) return { asOf: new Date(0).toISOString(), rows: [], nextCursor: null, viewer: null };
   const payload = snap.payload as GameSnapshotPayload;
-  const limit = Math.min(Math.max(query.limit ?? LEADERBOARD_PAGE_DEFAULT, 1), LEADERBOARD_PAGE_MAX);
+  const limit = Math.min(
+    Math.max(query.limit ?? LEADERBOARD_PAGE_DEFAULT, 1),
+    LEADERBOARD_PAGE_MAX,
+  );
   let cursor: LeaderboardCursor | undefined;
   if (query.cursor) {
     cursor = decodeCursor(query.cursor);
     if (!cursor) throw new ApiError('BAD_CURSOR');
   }
   const filtered = cursor
-    ? payload.rows.filter((row) => afterCursor(BigInt(row.score), new Date(row.achievedAt), row.userId, cursor))
+    ? payload.rows.filter((row) =>
+        afterCursor(BigInt(row.score), new Date(row.achievedAt), row.userId, cursor),
+      )
     : payload.rows;
   const page = filtered.slice(0, limit);
   const last = page[page.length - 1];
@@ -344,10 +380,7 @@ export async function readLeaderboard(
   return { asOf: payload.asOf, rows: page, nextCursor, viewer };
 }
 
-export async function readStandings(
-  db: Database,
-  seasonId: string,
-): Promise<ChampionshipPayload> {
+export async function readStandings(db: Database, seasonId: string): Promise<ChampionshipPayload> {
   const snap = await db
     .select()
     .from(rankingSnapshots)

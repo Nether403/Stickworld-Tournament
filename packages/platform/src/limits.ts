@@ -3,6 +3,7 @@ export const ISSUE_RATE_USER_PER_MIN = 10;
 export const ISSUE_RATE_USER_PER_HOUR = 60;
 export const ISSUE_RATE_IP_PER_MIN = 30;
 export const FINISH_RATE_USER_PER_MIN = 20;
+export const UGC_REPORT_RATE_PER_HOUR = 5;
 export const DAILY_ATTEMPT_CAP = 5;
 export const MAX_REPLAY_COMPRESSED_BYTES = 64 * 1024;
 export const SCORE_ENVELOPE_ABS = 1_000_000_000_000n;

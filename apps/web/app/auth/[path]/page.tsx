@@ -39,6 +39,7 @@ export default function AuthPage() {
         Google works in development with Neon shared credentials. Email uses the Neon Auth bundled
         sender.
       </p>
+      <p>By continuing with Google, you confirm that you are 13 or older.</p>
       <p>
         <button
           type="button"
@@ -124,6 +125,9 @@ export default function AuthPage() {
             required
             minLength={8}
           />
+        </label>
+        <label>
+          <input type="checkbox" name="age-confirmation" required /> I am 13 or older
         </label>
         <button type="submit">Create account</button>
       </form>

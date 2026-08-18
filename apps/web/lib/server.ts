@@ -25,14 +25,25 @@ export function platformContext(): PlatformContext {
   };
 }
 
-export async function authUserId(): Promise<string | undefined> {
+export async function authIdentity(): Promise<{ id?: string; email?: string | null }> {
   const { auth } = await import('./auth/server');
   try {
     const result = await auth.getSession();
-    return result.data?.user?.id;
+    return {
+      id: result.data?.user?.id,
+      email: result.data?.user?.email,
+    };
   } catch {
-    return undefined;
+    return {};
   }
+}
+
+export async function authUserId(): Promise<string | undefined> {
+  return (await authIdentity()).id;
+}
+
+export async function authEmail(): Promise<string | null | undefined> {
+  return (await authIdentity()).email;
 }
 
 export function jsonError(err: unknown): Response {
@@ -40,7 +51,10 @@ export function jsonError(err: unknown): Response {
     const api = err as { status: number; toJSON: () => unknown };
     return Response.json(api.toJSON(), { status: api.status });
   }
-  return Response.json({ error: { code: 'INTERNAL', message: 'Something went wrong.' } }, { status: 500 });
+  return Response.json(
+    { error: { code: 'INTERNAL', message: 'Something went wrong.' } },
+    { status: 500 },
+  );
 }
 
 export function clientIp(req: Request): string {

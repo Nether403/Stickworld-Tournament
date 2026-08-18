@@ -52,8 +52,65 @@ test('auth offers Google and email, not GitHub', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Continue with Google' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Sign in with email' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Create account' })).toBeVisible();
+  const ageConfirmation = page.getByRole('checkbox', { name: 'I am 13 or older' });
+  await expect(ageConfirmation).toBeVisible();
+  await expect(ageConfirmation).toHaveAttribute('required', '');
+  await expect(page.getByText(/continue with Google.*13 or older/i)).toBeVisible();
   await expect(page.getByRole('button', { name: /GitHub/i })).toHaveCount(0);
   await expect(page.getByText(/Continue with GitHub/i)).toHaveCount(0);
+});
+
+test('legal page publishes age, UGC, privacy, prize, and operator terms', async ({ page }) => {
+  await page.goto('/legal');
+  await expect(page.getByRole('heading', { name: 'Legal and community terms' })).toBeVisible();
+  await expect(page.getByText(/13 or older/i)).toBeVisible();
+  await expect(page.getByText(/user-generated content/i)).toBeVisible();
+  await expect(page.getByText(/export.*delete/i)).toBeVisible();
+  await expect(page.getByText(/no prizes/i)).toBeVisible();
+  await expect(page.getByRole('link', { name: /operator@/i })).toBeVisible();
+});
+
+test('security headers allow Hookline practice while denying framing and device access', async ({
+  page,
+}) => {
+  const response = await page.goto('/play/hookline-sprint');
+  expect(response?.headers()['x-content-type-options']).toBe('nosniff');
+  expect(response?.headers()['x-frame-options']).toBe('DENY');
+  expect(response?.headers()['referrer-policy']).toBe('strict-origin-when-cross-origin');
+  expect(response?.headers()['permissions-policy']).toContain('camera=()');
+  const csp = response?.headers()['content-security-policy'] ?? '';
+  expect(csp).toContain("script-src 'self' 'wasm-unsafe-eval'");
+  expect(csp).toContain('accounts.google.com');
+  expect(csp).not.toMatch(/generativelanguage|deepgram|openrouter/i);
+  await expect(page.getByTestId('hookline-stage')).toBeVisible();
+});
+
+test('moderation routes are non-leaky without a moderator session', async ({ request }) => {
+  const list = await request.get('/v1/moderation/reports?status=open');
+  expect(list.status()).toBe(404);
+  const action = await request.post(
+    '/v1/moderation/reports/00000000-0000-0000-0000-000000000000/action',
+    {
+      data: { action: 'dismiss', reason_code: 'test', reason_text: 'test' },
+    },
+  );
+  expect(action.status()).toBe(404);
+});
+
+test('guest report requests do not require a session', async ({ request }) => {
+  test.skip(
+    !process.env.DATABASE_URL && !process.env.DATABASE_URL_UNPOOLED,
+    'report request shape requires the integration database',
+  );
+  const res = await request.post('/v1/reports', {
+    data: {
+      targetUserId: '00000000-0000-0000-0000-000000000000',
+      reason_code: 'other',
+      details: 'request-shape check',
+    },
+  });
+  expect(res.status()).toBe(404);
+  expect(res.status()).not.toBe(401);
 });
 
 test('ranked issue without a session is 401', async ({ request }) => {

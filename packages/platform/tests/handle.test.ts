@@ -12,4 +12,13 @@ describe('normalizeHandle', () => {
     expect(normalizeHandle('_nope')).toEqual({ ok: false, code: 'HANDLE_INVALID' });
     expect(normalizeHandle('Ａbc')).toEqual({ ok: false, code: 'HANDLE_INVALID' });
   });
+
+  it('rejects handles reserved for anonymised profiles', () => {
+    expect(normalizeHandle('d-0123456789ab')).toEqual({ ok: false, code: 'HANDLE_INVALID' });
+    expect(normalizeHandle('D-0123456789ABC')).toEqual({ ok: false, code: 'HANDLE_INVALID' });
+    expect(normalizeHandle('d-0123456789abcdef')).toEqual({
+      ok: true,
+      handle: 'd-0123456789abcdef',
+    });
+  });
 });

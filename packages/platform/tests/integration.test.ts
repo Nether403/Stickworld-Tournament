@@ -2,9 +2,12 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { gunzipSync, gzipSync } from 'node:zlib';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   applyMigrations,
+  attempts,
+  auditEvents,
   createDb,
   createDirectPool,
   dailyBoards,
@@ -12,12 +15,17 @@ import {
   gameVersions,
   games,
   hasDatabaseUrl,
+  moderationActions,
+  profiles,
+  rankedInvites,
   rankingSnapshots,
   runs,
   scoreSubmissions,
   seasonGames,
   seasons,
   seedDatabase,
+  seedGame,
+  ugcReports,
   verificationJobs,
   verifiedResults,
   type Database,
@@ -33,6 +41,13 @@ import { rotateDaily } from '../src/daily.js';
 import { packSeed, unpackSeed, uuidToBytes } from '../src/seed128.js';
 import { floorWindow, hitRateLimit } from '../src/rate-limit.js';
 import type { PlatformContext } from '../src/context.js';
+import {
+  fileReport,
+  listModerationReports,
+  listUserNotices,
+  moderateReport,
+} from '../src/moderation.js';
+import { anonymiseProfile, exportUserData } from '../src/privacy.js';
 import pg from 'pg';
 
 const SAMPLE = readFileSync(
@@ -58,6 +73,14 @@ function goldenEntropy(): PlatformContext {
       },
     },
   });
+}
+
+async function replayForAttempt(attemptId: string): Promise<Buffer> {
+  const decoded = await decodeReplay(SAMPLE);
+  if (!decoded.ok) throw new Error('invalid sample fixture');
+  return Buffer.from(
+    await encodeReplay({ ...decoded.header, attemptId: uuidToBytes(attemptId) }, decoded.events),
+  );
 }
 
 describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
@@ -112,7 +135,20 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
 
   it('rejects unauthenticated ranked issue at the profile gate', async () => {
     const { requireRankedUser } = await import('../src/profiles.js');
-    await expect(requireRankedUser(db, undefined)).rejects.toMatchObject({ code: 'UNAUTHENTICATED' });
+    await expect(requireRankedUser(db, undefined)).rejects.toMatchObject({
+      code: 'UNAUTHENTICATED',
+    });
+  });
+
+  it('requires active status at the ranked profile gate', async () => {
+    const { requireRankedUser } = await import('../src/profiles.js');
+    const authUserId = `ranked-status-${randomUUID()}`;
+    const profile = await upsertProfile(db, authUserId);
+    await claimHandle(db, c.clock, profile.userId, `a${randomUUID().slice(0, 8)}`);
+    for (const status of ['suspended', 'anonymised'] as const) {
+      await db.update(profiles).set({ status }).where(eq(profiles.userId, profile.userId));
+      await expect(requireRankedUser(db, authUserId)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    }
   });
 
   it('refuses a degenerate all-zero seed', async () => {
@@ -178,11 +214,16 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
       .then((r) => r[0]);
     expect(sub?.verificationStatus).toBe('verified');
     expect(sub?.verifiedScore).toBe(302n);
-    expect(sub?.verifiedHash && Buffer.from(sub.verifiedHash).readBigUInt64LE(0).toString(16).padStart(16, '0')).toBe(
-      'e6ee35729a0c77b3',
-    );
+    expect(
+      sub?.verifiedHash &&
+        Buffer.from(sub.verifiedHash).readBigUInt64LE(0).toString(16).padStart(16, '0'),
+    ).toBe('e6ee35729a0c77b3');
 
-    const season = await db.select().from(seasons).where(eq(seasons.slug, 'ci')).then((r) => r[0]);
+    const season = await db
+      .select()
+      .from(seasons)
+      .where(eq(seasons.slug, 'ci'))
+      .then((r) => r[0]);
     const sg = await db
       .select({ id: seasonGames.id })
       .from(seasonGames)
@@ -233,7 +274,10 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
       .then((r) => r[0]);
     expect(sub?.verificationStatus).toBe('rejected');
     expect(sub?.reasonCode).toBe('SCORE_MISMATCH');
-    const verified = await db.select().from(verifiedResults).where(eq(verifiedResults.runId, finished.runId));
+    const verified = await db
+      .select()
+      .from(verifiedResults)
+      .where(eq(verifiedResults.runId, finished.runId));
     expect(verified).toHaveLength(0);
   });
 
@@ -262,7 +306,14 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
     );
     const replayB64 = Buffer.from(replay).toString('base64');
 
-    const expiredCtx = { ...issueCtx, clock: { now: () => new Date(start.getTime() + 16 * 60 * 1000) } };
+    await db
+      .update(attempts)
+      .set({ expiresAt: new Date(start.getTime() + 60_000) })
+      .where(eq(attempts.id, issued.attemptId));
+    const expiredCtx = {
+      ...issueCtx,
+      clock: { now: () => new Date(start.getTime() + 2 * 60 * 1000) },
+    };
     await expect(
       finishAttempt(db, expiredCtx, {
         userId: a.userId,
@@ -353,7 +404,10 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
     expect(claimed[0]?.state).toBe('locked');
     await processNextJob(db, issueCtx.clock, 'worker-3', { staleLockSeconds: 0 });
     await processNextJob(db, issueCtx.clock, 'worker-4', { staleLockSeconds: 0 });
-    const results = await db.select().from(verifiedResults).where(eq(verifiedResults.runId, finished.runId));
+    const results = await db
+      .select()
+      .from(verifiedResults)
+      .where(eq(verifiedResults.runId, finished.runId));
     expect(results).toHaveLength(1);
   });
 
@@ -397,9 +451,9 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
       .where(eq(scoreSubmissions.runId, finished.runId))
       .then((r) => r[0]);
     expect(sub?.reasonCode).toBe('WORKER_FAULT');
-    expect(await db.select().from(verifiedResults).where(eq(verifiedResults.runId, finished.runId))).toHaveLength(
-      0,
-    );
+    expect(
+      await db.select().from(verifiedResults).where(eq(verifiedResults.runId, finished.runId)),
+    ).toHaveLength(0);
   });
 
   it('keeps a worse verified score from replacing a personal best', async () => {
@@ -421,7 +475,10 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
   });
 
   it('keeps daily verified runs off the championship snapshot', async () => {
-    const { season, sg, dailySg } = await createIsolatedSeason(db, `iso-${randomUUID().slice(0, 8)}`);
+    const { season, sg, dailySg } = await createIsolatedSeason(
+      db,
+      `iso-${randomUUID().slice(0, 8)}`,
+    );
     const profile = await upsertProfile(db, `auth-${randomUUID()}`);
     await insertVerifiedBest(db, profile.userId, sg.id, 100n);
     await recomputeSeason(db, c.clock, season.id, { force: true });
@@ -456,7 +513,10 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
   });
 
   it('keeps weekly verified runs off the championship snapshot', async () => {
-    const { season, sg, weeklySg } = await createIsolatedSeason(db, `iso-w-${randomUUID().slice(0, 8)}`);
+    const { season, sg, weeklySg } = await createIsolatedSeason(
+      db,
+      `iso-w-${randomUUID().slice(0, 8)}`,
+    );
     const profile = await upsertProfile(db, `auth-${randomUUID()}`);
     await insertVerifiedBest(db, profile.userId, sg.id, 100n);
     await recomputeSeason(db, c.clock, season.id, { force: true });
@@ -760,6 +820,426 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
     expect(sub?.verificationStatus).toBe('verified');
     expect(sub?.verifiedScore).toBe(BigInt(golden.score));
   });
+
+  it.each([
+    [
+      'BAD_MAGIC',
+      (valid: Buffer) => {
+        const raw = gunzipSync(valid);
+        raw[0] = 0;
+        return gzipSync(raw);
+      },
+    ],
+    ['TRUNCATED', (valid: Buffer) => gzipSync(gunzipSync(valid).subarray(0, 40))],
+    [
+      'CRC_MISMATCH',
+      (valid: Buffer) => {
+        const raw = gunzipSync(valid);
+        raw[raw.length - 1] = raw[raw.length - 1]! ^ 0xff;
+        return gzipSync(raw);
+      },
+    ],
+    ['TOO_LARGE', () => Buffer.alloc(64 * 1024 + 1)],
+    ['GZIP', () => Buffer.from('not-a-gzip-stream')],
+    [
+      'UNSUPPORTED_FORMAT',
+      (valid: Buffer) => {
+        const raw = gunzipSync(valid);
+        raw.writeUInt16LE(99, 4);
+        return gzipSync(raw);
+      },
+    ],
+    [
+      'TICK_ORDER',
+      async (valid: Buffer) => {
+        const decoded = await decodeReplay(valid);
+        if (!decoded.ok) throw new Error('invalid generated replay');
+        return Buffer.from(
+          await encodeReplay(decoded.header, [
+            { tick: 1, actionId: 2, value: 1 },
+            { tick: 1, actionId: 1, value: 0 },
+          ]),
+        );
+      },
+    ],
+  ] as const)('maps replay decode failure %s through finishAttempt', async (code, corrupt) => {
+    const profile = await upsertProfile(db, `decode-${code}-${randomUUID()}`);
+    await claimHandle(db, c.clock, profile.userId, `d${randomUUID().slice(0, 8)}`);
+    const issueCtx = goldenEntropy();
+    const issued = await issueAttempt(db, issueCtx, {
+      userId: profile.userId,
+      gameSlug: 'test-chamber',
+      seedPolicy: 'fixed-course',
+      ip: `198.51.100.${Math.floor(Math.random() * 200) + 1}`,
+    });
+    const valid = await replayForAttempt(issued.attemptId);
+    const replay = await corrupt(valid);
+    await expect(
+      finishAttempt(db, issueCtx, {
+        userId: profile.userId,
+        attemptId: issued.attemptId,
+        token: issued.token,
+        replayB64: replay.toString('base64'),
+        claimedScore: '302',
+      }),
+    ).rejects.toMatchObject({ code });
+  });
+
+  it('rate-limits one issue identity without sharing its user bucket', async () => {
+    const now = new Date('2026-08-18T20:00:00.000Z');
+    const a = await upsertProfile(db, `limited-${randomUUID()}`);
+    const b = await upsertProfile(db, `unlimited-${randomUUID()}`);
+    await claimHandle(db, { now: () => now }, a.userId, `l${randomUUID().slice(0, 8)}`);
+    await claimHandle(db, { now: () => now }, b.userId, `n${randomUUID().slice(0, 8)}`);
+    const window = floorWindow(now, 60_000);
+    for (let i = 0; i < 10; i++) {
+      await hitRateLimit(db, `issue:user:${a.userId}:m`, window, 10);
+    }
+    const rateCtx = ctx({ clock: { now: () => now } });
+    await expect(
+      issueAttempt(db, rateCtx, {
+        userId: a.userId,
+        gameSlug: 'test-chamber',
+        seedPolicy: 'fixed-course',
+        ip: '203.0.113.90',
+      }),
+    ).rejects.toMatchObject({ code: 'RATE_LIMITED' });
+    await expect(
+      issueAttempt(db, rateCtx, {
+        userId: b.userId,
+        gameSlug: 'test-chamber',
+        seedPolicy: 'fixed-course',
+        ip: '203.0.113.90',
+      }),
+    ).resolves.toMatchObject({ dailyCapRemaining: 4 });
+  });
+
+  it('requires an invite for invite seasons and lets moderators bypass it', async () => {
+    const now = new Date('2026-08-18T21:00:00.000Z');
+    const suffix = randomUUID().slice(0, 8);
+    const [season] = await db
+      .insert(seasons)
+      .values({
+        slug: `a-invite-${suffix}`,
+        startsAt: new Date('2020-01-01T00:00:00.000Z'),
+        endsAt: new Date('2099-01-01T00:00:00.000Z'),
+        status: 'active',
+        rulesVersion: 1,
+        entryPolicy: 'invite',
+      })
+      .returning();
+    const gameSlug = `invite-game-${suffix}`;
+    await seedGame(
+      db,
+      season!.id,
+      {
+        slug: gameSlug,
+        registryId: 20_000 + (Number.parseInt(suffix.slice(0, 4), 16) % 40_000),
+        maxRunTicks: 600,
+        seedPolicies: ['fixed-course'],
+      },
+      now,
+    );
+
+    const email = `Invite-${suffix}@Example.com`;
+    const player = await upsertProfile(db, `invite-player-${randomUUID()}`, email);
+    await claimHandle(db, { now: () => now }, player.userId, `i${randomUUID().slice(0, 8)}`);
+    const issueCtx = goldenEntropy();
+    issueCtx.clock = { now: () => now };
+    await expect(
+      issueAttempt(db, issueCtx, {
+        userId: player.userId,
+        email,
+        gameSlug,
+        seedPolicy: 'fixed-course',
+        ip: '203.0.113.101',
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_INVITED' });
+
+    await db.insert(rankedInvites).values({ email: email.toLowerCase(), invitedAt: now });
+    await expect(
+      issueAttempt(db, issueCtx, {
+        userId: player.userId,
+        email,
+        gameSlug,
+        seedPolicy: 'fixed-course',
+        ip: '203.0.113.101',
+      }),
+    ).resolves.toBeTruthy();
+    const invite = await db
+      .select()
+      .from(rankedInvites)
+      .where(eq(rankedInvites.email, email))
+      .then((rows) => rows[0]);
+    expect(invite?.consumedUserId).toBe(player.userId);
+    expect(invite?.consumedAt).toEqual(now);
+
+    const moderator = await upsertProfile(db, `invite-moderator-${randomUUID()}`);
+    await db
+      .update(profiles)
+      .set({ role: 'moderator' })
+      .where(eq(profiles.userId, moderator.userId));
+    await claimHandle(db, { now: () => now }, moderator.userId, `m${randomUUID().slice(0, 8)}`);
+    await expect(
+      issueAttempt(db, goldenEntropy(), {
+        userId: moderator.userId,
+        gameSlug,
+        seedPolicy: 'fixed-course',
+        ip: '203.0.113.102',
+      }),
+    ).resolves.toBeTruthy();
+  });
+
+  it('keeps a season closing until issued attempts expire and then freezes it', async () => {
+    const start = new Date('2026-08-18T22:00:00.000Z');
+    const { season, sg } = await createIsolatedSeason(db, `closing-${randomUUID().slice(0, 8)}`);
+    const profile = await upsertProfile(db, `closing-${randomUUID()}`);
+    await db.insert(attempts).values({
+      userId: profile.userId,
+      seasonGameId: sg.id,
+      gameVersionId: sg.gameVersionId,
+      seed: packSeed([1, 2, 3, 4]),
+      nonce: randomBytes(16),
+      issuedAt: start,
+      expiresAt: new Date(start.getTime() + 15 * 60 * 1000),
+      status: 'issued',
+    });
+
+    await closeSeason(db, { now: () => start }, season.id);
+    const closing = await db
+      .select()
+      .from(seasons)
+      .where(eq(seasons.id, season.id))
+      .then((r) => r[0]);
+    expect(closing?.status).toBe('closing');
+    expect(
+      await db
+        .select()
+        .from(rankingSnapshots)
+        .where(and(eq(rankingSnapshots.seasonId, season.id), eq(rankingSnapshots.frozen, true))),
+    ).toHaveLength(0);
+
+    const afterGrace = new Date(start.getTime() + 15 * 60 * 1000 + 1);
+    await closeSeason(db, { now: () => afterGrace }, season.id);
+    const closed = await db
+      .select()
+      .from(seasons)
+      .where(eq(seasons.id, season.id))
+      .then((r) => r[0]);
+    expect(closed?.status).toBe('closed');
+    expect(
+      await db
+        .select()
+        .from(rankingSnapshots)
+        .where(and(eq(rankingSnapshots.seasonId, season.id), eq(rankingSnapshots.frozen, true))),
+    ).not.toHaveLength(0);
+  });
+
+  it('rejects finish as soon as its season starts closing', async () => {
+    const profile = await upsertProfile(db, `season-finish-${randomUUID()}`);
+    await claimHandle(db, c.clock, profile.userId, `q${randomUUID().slice(0, 8)}`);
+    const issueCtx = goldenEntropy();
+    const issued = await issueAttempt(db, issueCtx, {
+      userId: profile.userId,
+      gameSlug: 'test-chamber',
+      seedPolicy: 'fixed-course',
+      ip: '203.0.113.110',
+    });
+    const season = await db
+      .select()
+      .from(seasons)
+      .where(eq(seasons.slug, 'ci'))
+      .then((r) => r[0]);
+    await db.update(seasons).set({ status: 'closing' }).where(eq(seasons.id, season!.id));
+    try {
+      await expect(
+        finishAttempt(db, issueCtx, {
+          userId: profile.userId,
+          attemptId: issued.attemptId,
+          token: issued.token,
+          replayB64: (await replayForAttempt(issued.attemptId)).toString('base64'),
+          claimedScore: '302',
+        }),
+      ).rejects.toMatchObject({ code: 'SEASON_INACTIVE' });
+    } finally {
+      await db.update(seasons).set({ status: 'active' }).where(eq(seasons.id, season!.id));
+    }
+  });
+
+  it('files hashed guest reports and records every moderator action and notice', async () => {
+    const now = new Date('2026-08-18T23:00:00.000Z');
+    const target = await upsertProfile(
+      db,
+      `report-target-${randomUUID()}`,
+      `target-${randomUUID()}@example.com`,
+    );
+    const reporter = await upsertProfile(db, `reporter-${randomUUID()}`);
+    const moderator = await upsertProfile(db, `moderator-${randomUUID()}`);
+    const targetHandle = `r${randomUUID().slice(0, 8)}`;
+    await claimHandle(db, { now: () => now }, target.userId, targetHandle);
+    await db
+      .update(profiles)
+      .set({ role: 'moderator' })
+      .where(eq(profiles.userId, moderator.userId));
+    const reportCtx = ctx({ clock: { now: () => now } });
+    const ip = '198.51.100.200';
+
+    const reports = [];
+    for (const action of ['suspend', 'force_release_handle', 'unsuspend', 'dismiss'] as const) {
+      reports.push(
+        await fileReport(db, reportCtx, {
+          reporterUserId: reporter.userId,
+          ip,
+          targetUserId: target.userId,
+          reasonCode: 'handle_offensive',
+          details: action,
+        }),
+      );
+    }
+    const stored = await db
+      .select()
+      .from(ugcReports)
+      .where(eq(ugcReports.id, reports[0]!.id))
+      .then((r) => r[0]);
+    expect(stored?.reporterIpHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(stored?.reporterIpHash).not.toContain(ip);
+    await expect(listModerationReports(db, reporter.userId, 'open')).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      status: 404,
+    });
+    expect(await listModerationReports(db, moderator.userId, 'open')).toHaveLength(4);
+
+    for (let i = 0; i < reports.length; i++) {
+      const action = (['suspend', 'force_release_handle', 'unsuspend', 'dismiss'] as const)[i]!;
+      await moderateReport(
+        db,
+        { now: () => new Date(now.getTime() + i + 1) },
+        {
+          actorUserId: moderator.userId,
+          reportId: reports[i]!.id,
+          action,
+          reasonCode: `rule_${i}`,
+          reasonText: `Reason ${i}`,
+        },
+      );
+    }
+    const targetAfter = await db
+      .select()
+      .from(profiles)
+      .where(eq(profiles.userId, target.userId))
+      .then((r) => r[0]);
+    expect(targetAfter?.status).toBe('active');
+    expect(targetAfter?.handle).toBeNull();
+    const notices = await listUserNotices(db, target.userId);
+    expect(notices).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          reasonCode: 'rule_0',
+          reasonText: 'Reason 0',
+          redress: expect.stringContaining('/legal'),
+        }),
+      ]),
+    );
+    expect(
+      await db
+        .select()
+        .from(moderationActions)
+        .where(eq(moderationActions.actorUserId, moderator.userId)),
+    ).toHaveLength(4);
+    expect(
+      await db.select().from(auditEvents).where(eq(auditEvents.actor, moderator.userId)),
+    ).toEqual(expect.arrayContaining([expect.objectContaining({ action: 'moderation.suspend' })]));
+  });
+
+  it('rate-limits reports by hashed IP without sharing another IP bucket', async () => {
+    const target = await upsertProfile(db, `report-rate-target-${randomUUID()}`);
+    const reportCtx = ctx({ clock: { now: () => new Date('2026-08-19T00:00:00.000Z') } });
+    for (let i = 0; i < 5; i++) {
+      await fileReport(db, reportCtx, {
+        ip: '198.51.100.210',
+        targetUserId: target.userId,
+        reasonCode: 'other',
+        details: String(i),
+      });
+    }
+    await expect(
+      fileReport(db, reportCtx, {
+        ip: '198.51.100.210',
+        targetUserId: target.userId,
+        reasonCode: 'other',
+        details: 'limited',
+      }),
+    ).rejects.toMatchObject({ code: 'UGC_REPORT_RATE' });
+    await expect(
+      fileReport(db, reportCtx, {
+        ip: '198.51.100.211',
+        targetUserId: target.userId,
+        reasonCode: 'other',
+        details: 'separate',
+      }),
+    ).resolves.toBeTruthy();
+  });
+
+  it('exports caller data, anonymises it, and rebuilds standings as retired', async () => {
+    const authUserId = `privacy-${randomUUID()}`;
+    const email = `privacy-${randomUUID()}@example.com`;
+    const profile = await upsertProfile(db, authUserId);
+    const profileWithEmail = await upsertProfile(db, authUserId, email);
+    expect(profileWithEmail).toMatchObject({ userId: profile.userId, email });
+    const handle = `p${randomUUID().slice(0, 8)}`;
+    await claimHandle(db, c.clock, profile.userId, handle);
+    const season = await db
+      .select()
+      .from(seasons)
+      .where(eq(seasons.slug, 'ci'))
+      .then((r) => r[0]);
+    const sg = await db
+      .select({ id: seasonGames.id })
+      .from(seasonGames)
+      .innerJoin(games, eq(games.id, seasonGames.gameId))
+      .where(and(eq(games.slug, 'test-chamber'), eq(seasonGames.seedPolicy, 'fixed-course')))
+      .then((r) => r[0]);
+    await insertVerifiedBest(db, profile.userId, sg!.id, 777n);
+    const other = await upsertProfile(db, `privacy-other-${randomUUID()}`);
+    await fileReport(db, c, {
+      reporterUserId: profile.userId,
+      ip: '198.51.100.220',
+      targetUserId: other.userId,
+      reasonCode: 'other',
+      details: 'export me',
+    });
+
+    const exported = await exportUserData(db, profile.userId);
+    expect(exported.profile.email).toBe(email);
+    expect(exported.attempts).not.toHaveLength(0);
+    expect(exported.runs[0]?.replay).toBe(Buffer.from([1]).toString('base64'));
+    expect(exported.verifiedResults[0]?.score).toBe('777');
+    expect(exported.reportsFiled).toHaveLength(1);
+    expect(exported.auditEvents).not.toHaveLength(0);
+
+    await anonymiseProfile(db, c.clock, profile.userId);
+    const anonymised = await db
+      .select()
+      .from(profiles)
+      .where(eq(profiles.userId, profile.userId))
+      .then((r) => r[0]);
+    expect(anonymised).toMatchObject({
+      status: 'anonymised',
+      email: null,
+      authUserId: `deleted:${profile.userId}`,
+    });
+    expect(anonymised?.handle).toMatch(/^d-[0-9a-f]{12,13}$/);
+    await expect(anonymiseProfile(db, c.clock, profile.userId)).rejects.toMatchObject({
+      code: 'ALREADY_ANONYMISED',
+    });
+
+    await recomputeSeason(db, c.clock, season!.id, { force: true });
+    const board = await readLeaderboard(db, season!.id, sg!.id, { viewerUserId: profile.userId });
+    expect(board.viewer?.handle).toBe('retired');
+    const replacement = await upsertProfile(db, authUserId, `new-${email}`);
+    expect(replacement.userId).not.toBe(profile.userId);
+    expect(replacement.handle).toBeNull();
+  });
 });
 
 async function loadOrderedThenRebuild(
@@ -794,7 +1274,11 @@ async function createIsolatedSeason(
       rulesVersion: 1,
     })
     .returning();
-  const game = await db.select().from(games).where(eq(games.slug, 'test-chamber')).then((r) => r[0]);
+  const game = await db
+    .select()
+    .from(games)
+    .where(eq(games.slug, 'test-chamber'))
+    .then((r) => r[0]);
   const version = await db
     .select()
     .from(gameVersions)
@@ -842,7 +1326,11 @@ async function insertVerifiedBest(
   seasonGameId: string,
   score: bigint,
 ): Promise<void> {
-  const sg = await db.select().from(seasonGames).where(eq(seasonGames.id, seasonGameId)).then((r) => r[0]);
+  const sg = await db
+    .select()
+    .from(seasonGames)
+    .where(eq(seasonGames.id, seasonGameId))
+    .then((r) => r[0]);
   const attemptId = randomUUID();
   const runId = randomUUID();
   const { attempts } = await import('@stickworld/db');
