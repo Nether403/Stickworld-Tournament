@@ -15,11 +15,13 @@ import {
   createTenBodyRagdoll,
   createRopeJoint,
   launchImpulse,
+  movingPlatformX,
   resetDynamicPose,
   createVerticalGateSensor,
   destroyImpulseJoint,
   setKinematicAngle,
   setKinematicTranslation,
+  stepMovingPlatform,
 } from '../src/index.ts';
 
 describe('physics-kit factories', () => {
@@ -55,6 +57,8 @@ describe('physics-kit factories', () => {
     const kin = createKinematicCuboid(sim, rapier, 1, 2, 0.6, 0.04, tags, 'pickaxe', true);
     setKinematicTranslation(kin.body, 1.1, 2.2);
     setKinematicAngle(kin.body, 45);
+    expect(movingPlatformX(5, 0.5, 120, 0)).toBe(5);
+    stepMovingPlatform(kin.body, 1, 2, 0.5, 120, 30);
     const ragdoll = createTenBodyRagdoll(sim, rapier, tags, 2, 1.4, true);
     expect(sim.registry.count()).toBeGreaterThanOrEqual(10);
     expect(ragdoll.joints).toBe(9);

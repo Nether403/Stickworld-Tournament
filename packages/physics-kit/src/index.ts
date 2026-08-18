@@ -1,4 +1,4 @@
-import { atan, hypot, SimWorld, type RapierModule } from '@stickworld/sim-core';
+import { atan, hypot, sin, SimWorld, type RapierModule } from '@stickworld/sim-core';
 
 export type ColliderTags = Map<number, string>;
 
@@ -224,6 +224,24 @@ export function setKinematicTranslation(
   y: number,
 ): void {
   body.setNextKinematicTranslation({ x, y });
+}
+
+/** Oscillating kinematic platform. `sin` is detmath. Extra PRNG draws belong in the generator, not here. */
+export function movingPlatformX(originX: number, amplitude: number, periodTicks: number, tick: number): number {
+  if (periodTicks <= 0 || amplitude === 0) return originX;
+  const omega = (2 * PI) / periodTicks;
+  return originX + amplitude * sin(tick * omega);
+}
+
+export function stepMovingPlatform(
+  body: { setNextKinematicTranslation: (t: { x: number; y: number }) => void },
+  originX: number,
+  originY: number,
+  amplitude: number,
+  periodTicks: number,
+  tick: number,
+): void {
+  setKinematicTranslation(body, movingPlatformX(originX, amplitude, periodTicks, tick), originY);
 }
 
 /** Degrees → radians via detmath `atan` π, then Rapier `setNextKinematicRotation`. */
