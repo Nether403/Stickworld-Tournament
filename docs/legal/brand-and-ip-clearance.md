@@ -1,11 +1,11 @@
 # Brand and IP Clearance — Parallel Track
 
-**Not a spec.** This runs alongside Specs 1–3 because it has long lead times and it gates naming.
+**Not a spec.** This runs alongside Specs 1–5 because it has long lead times and it gates naming.
 Starting it late is how a project ends up renaming ten games after building them.
 
 > This document is a design-control process, not legal advice. Qualified IP counsel reviews
 > branding, character silhouettes, UI, and launch assets in the target jurisdictions before public
-> launch.
+> launch. This track runs alongside Specs 1–5 because naming has long lead times.
 
 ---
 

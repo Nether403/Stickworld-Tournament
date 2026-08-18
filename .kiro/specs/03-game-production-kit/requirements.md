@@ -1,6 +1,6 @@
 # Spec 3 — Game Production Kit and Reference Game
 
-**Status:** approved 2026-08-18; **executed** on `cursor/spec-3-full-depth-bda1`
+**Status:** approved 2026-08-18; **executed and merged** ([PR #3](https://github.com/Nether403/Stickworld-Tournament/pull/3))
 **Depth:** complete (design.md + tasks.md match Spec 1/2 style)
 **Covers:** Plan tasks 10, 12, 14
 **Depends on:** Spec 1 merged (PR #1, Branch A); Spec 2 merged (PR #2)

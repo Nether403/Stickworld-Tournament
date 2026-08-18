@@ -1,141 +1,226 @@
-# Spec 4 — Design (scope and contract depth)
+# Spec 4 — Design
+
+**Depth:** full. This document is detailed enough to implement from directly.
+**Fork:** Branch A (ADR-0001). Worker stays Node.
+**Roster contracts:** ADR-0006.
+**Do not execute until approved.**
+
+The previous scope draft named waves and four open questions. Those questions
+are closed in ADR-0006. Geometry and score numbers live in `docs/games/*.md`.
 
 ---
 
-## 1. Why waves, and why this order
+## 1. Design principle
 
-Games are grouped so each wave pays for one set of physics primitives once, and ordered so risk
-rises only after the platform has absorbed the previous increment.
+> One new hard thing per wave. Prove it on the first consumer with goldens.
+> Extract only what two or more games (or the rest of the wave) will import.
+> Best-of-3 is extra phases inside one sim, not extra `/v1` attempts.
 
 ```
-Spec 3    rope/joint            Hookline, Pickaxe        proves the kit
-  ↓
-Wave A    projectile            Launch, Archery, Hammer  smallest replays, multi-attempt scoring
-  ↓
-Wave B    seeded generation     Pogo Tower               first generated content
-  ↓
-Wave C    continuous + vehicle  Rooftop, Bike, Cargo     longest runs, largest replays
-  ↓
-Wave D    destruction           Demolition Dive          highest risk, last
+Wave A  projectile (+ ragdoll on game two of the wave)
+Wave B  seeded generation + kinematic movers
+Wave C  kinematic character, wheels, jointed cargo
+Wave D  breakables + deterministic despawn
 ```
 
-Each wave adds exactly one new hard thing. Wave A adds multi-attempt aggregation. Wave B adds
-deterministic procedural generation. Wave C adds vehicles and long replays. Wave D adds mass
-destruction. Nothing in the sequence requires two new capabilities at once.
+Spec 3 seam stays the default: seed + `GAMES` map + per-slug play page +
+workspace deps. The only scheduled `/v1` increment is Wave B `weekly-seed`.
 
 ---
 
-## 2. `physics-kit` growth by wave
+## 2. Repository layout (what Spec 4 adds)
 
-Primitives are implemented when the first game that needs them arrives, never speculatively.
+```
+docs/
+  adr/0006-spec4-roster-contracts.md
+  games/launch-lab.md
+  games/ragdoll-archery-rush.md
+  games/hammer-throw-havoc.md
+  games/pogo-tower.md
+  games/rooftop-relay.md
+  games/balance-bike-blitz.md
+  games/cargo-chaos.md
+  games/demolition-dive.md
+  legal/inspiration/<slug>.md          # eight new ledgers
+games/
+  launch-lab/                          # registryId 3
+  ragdoll-archery-rush/                # registryId 4
+  hammer-throw-havoc/                  # registryId 5
+  pogo-tower/                          # registryId 6
+  rooftop-relay/                       # registryId 7
+  balance-bike-blitz/                  # registryId 8
+  cargo-chaos/                         # registryId 9
+  demolition-dive/                     # registryId 10
+apps/web/app/play/<slug>/              # one folder per game (Spec 3 lesson)
+```
 
-| Primitive | Introduced | Consumers |
-|---|---|---|
-| rope / distance joint | Spec 3 | Hookline, Pickaxe |
-| checkpoint, impact sensor | Spec 3 | all |
-| combo / streak | Spec 3 | Hookline, Rooftop, Pogo, Bike, Demolition, Archery |
-| projectile | Wave A | Launch, Archery, Hammer, Demolition |
-| angular launch / release | Wave A | Hammer, Launch |
-| moving platform (kinematic) | Wave B | Pogo, Rooftop, Bike, Cargo, Pickaxe |
-| seeded generator harness | Wave B | Pogo, and later daily-seed content |
-| kinematic character controller | Wave C | Rooftop |
-| wheel assembly + suspension | Wave C | Bike |
-| jointed cargo + condition metric | Wave C | Cargo |
-| breakable object / chain reaction | Wave D | Demolition |
-| deterministic despawn | Wave D | Demolition |
+Package exports stay `{ ".": sim, "./client": Phaser }`. Worker and
+`packages/platform/src/verify.ts` import `.` only.
 
-Every addition carries the same obligation as the originals: fixed construction order,
-`detmath` only, integer-scaled parameters, and a determinism fixture before any game depends on it.
+`physics-kit` grows in place. No new workspace package for ragdoll unless a
+second Wave A game imports the assembly.
 
 ---
 
-## 3. Multi-attempt scoring contract (Wave A)
+## 3. Best-of phase machine
 
-Launch Lab, Hammer Throw, and Demolition Dive use `attemptShape: { kind: 'best-of', count: 3 }`.
+Applies to Launch Lab, Hammer Throw, Demolition Dive.
 
 ```
-ONE server-issued attempt
-  └─ ONE replay containing all three sub-attempts, delimited by a reset marker
-      └─ ONE submission
-          └─ server re-simulates all three and aggregates
+tick 0: construct ALL bodies that will ever exist (ramps, rings, projectile, …)
+loop:
+  aim / charge phase  → player inputs
+  launch edge         → apply impulse once
+  flight / impact     → score this sub-attempt into events with type prefix
+  if subIndex == 3 or tick >= maxRunTicks: finished = true
+  else: resetTranslation/linvel on the projectile (and ragdoll parts for
+        Demolition); destroyImpulseJoint any ephemeral joints; subIndex++
 ```
 
-Aggregation is part of `scoring_version`. Whether "best of three" means the highest single
-sub-attempt or the sum of all three is a per-game decision recorded in the game's manifest and
-its design doc — but it is decided **before** the leaderboard opens, never adjusted after.
+Rules:
 
-Rationale for one replay rather than three submissions: three submissions would triple
-verification load, let a player abandon bad sub-attempts, and make the attempt cap meaningless.
+- `ranked_score = sum(subScore[1..3])`. Missed launches score 0 for that slot.
+- Score events keep a `sub` index in `type` (`launch-ring`, or put `sub` in
+  `renderState` only — **do not** add fields to `ScoreEvent` without a Spec 1
+  amendment). Use event types `ring`, `distance`, `landing` as today; unit
+  tests group them by tick ranges. Optional: `points` already integer-sum.
+- Replay is ordinary `SWR1` inputs. Three `launch` 0→1 edges delimit phases.
+  No format-version bump.
+- `GameHost` still finishes when `simulation.finished` is true. No host API
+  change. If a host change appears, kit-finding stop.
+- Cheap-check 8 events/tick still holds (aim + power + pose + launch ≤ 4).
+
+`packages/scoring` MAY gain `sumSubAttempts(scores: readonly number[]): number`
+that is `scores.reduce((a, b) => a + b, 0)` with tests. Do not invent float
+averaging.
 
 ---
 
-## 4. Deterministic generation contract (Wave B onward)
+## 4. `physics-kit` growth
 
-The generator is simulation code and is bound by every Spec 1 rule:
+| Primitive | First consumer | Also used by | Notes |
+|---|---|---|---|
+| projectile spawn + impulse | Launch Lab | Archery arrow, Hammer head, Demolition body | `launchImpulse(body, dir, speed)` using `detmath` |
+| angular spin then release | Hammer Throw | (Launch does not spin a hammer) | Kit only if a second game needs it in-wave; else keep in Hammer |
+| ten-body ragdoll | Archery | Demolition (Wave D) | Extract after Archery goldens |
+| kinematic moving platform | Pogo Tower | Rooftop, Bike, Cargo | Not Pickaxe v1 |
+| seeded generator harness | Pogo Tower | later daily content | Geometry fixture ≠ gameplay fixture |
+| kinematic character controller | Rooftop Relay | — | v1 stumble is cosmetic |
+| wheel + suspension | Balance Bike | — | |
+| jointed cargo + condition | Cargo Chaos | — | integer 0–100 |
+| breakable + chain + despawn | Demolition Dive | — | caps in manifest |
 
-- Seeded exclusively from the server-issued 128-bit seed via the `sim-core` PRNG
-- `detmath` only, no `Math` transcendentals
-- No wall-clock reads, no `Math.random`
-- Emits geometry in a **fixed, stable order** so body creation indices are reproducible
-- Versioned under `simulation_version`; a generator change is competition-affecting
+Construction through `sim.createRigidBody` only. Lint glob already covers
+`packages/physics-kit/src/**/*.ts`.
 
-Test obligation: same seed → identical geometry → identical state hash, in all four runtimes.
-This gets its own fixture separate from the gameplay fixture, because a generator bug and a
-solver divergence look identical in a final hash and need to be distinguishable.
+### Ragdoll v1 (Archery, then Demolition)
+
+Ten capsules, revolute joints with angular limits, construction order **root
+to leaves**, documented in `docs/games/ragdoll-archery-rush.md`. No PD
+balance controller in v1 (active ragdoll is a determinism swamp). Archery
+stance is kinematic pose or locked hips plus free arms — the game doc picks
+one and freezes it. Demolition may unlock all joints on launch.
 
 ---
 
 ## 5. Replay size ladder
 
-Budgets are declared per game in its manifest and asserted in CI. Wave C is where this stops
-being theoretical.
+Asserted in each game's contract test.
 
-| Class | Games | Target compressed |
+| Class | Games | Compressed ceiling |
 |---|---|---|
-| tiny | Hookline, Launch, Archery, Hammer | < 5 KB |
-| small | Pickaxe, Pogo | < 15 KB |
-| medium | Rooftop, Bike, Cargo | < 40 KB |
-| large | Demolition | < 80 KB |
+| tiny | Hookline, Launch, Archery, Hammer | 5_120 bytes |
+| small | Pickaxe, Pogo | 15_360 bytes |
+| medium | Rooftop, Bike, Cargo | 40_960 bytes |
+| large | Demolition | 81_920 bytes |
 
-At the top of the ladder, 100,000 runs is roughly 8 GB — comfortably inside Postgres `bytea`, and
-the reason object storage stays off the critical path.
+Wave C writes the 150 s synthetic stream test **before** the Phaser scene.
 
 ---
 
-## 6. Demolition Dive risk register
+## 6. Wave B weekly seed
 
-The one game with a real chance of not shipping, so its risks are named up front.
+Schema already: `seed_policy` enum includes `weekly-seed`.
+
+Increment (named, allowed):
+
+- `packages/platform/src/attempts.ts` `seedPolicy` union adds `'weekly-seed'`
+- `apps/web/app/v1/games/[gameId]/attempts/route.ts` body type
+- `packages/game-host/src/ranked-client.ts` / `types.ts`
+- Rotation: ISO week key `YYYY-Www` stored either as `daily_boards.utc_date`
+  = that Monday, or a `weekly_boards` table if a check constraint blocks it.
+  Prefer Monday-date reuse of `daily_boards` to avoid a migration. If a
+  migration is required, it is a Wave B kit finding (schema). Championship
+  recompute already skips non-`fixed-course`.
+
+Generator: `createTower(prng: Prng): Platform[]` sorted by `y` ascending,
+then `x`. Same function on client and worker. PRNG draws are the only
+entropy. Count of platforms is a function of seed, not wall clock.
+
+---
+
+## 7. Visual language and play routes
+
+`@stickworld/ui` tokens unchanged (ADR-0005). Phaser primitives until Spec 5.
+
+Play route per slug, copied from Hookline/Pickaxe:
+
+```
+apps/web/app/play/<slug>/page.tsx
+apps/web/app/play/<slug>/play-client.tsx   # dynamic(..., { ssr: false }) one island
+```
+
+Catalogue on `/` gains a card when the game is seeded. Lazy-load e2e: opening
+slug A must not request slug B's client module.
+
+---
+
+## 8. Integration checklist
+
+Unchanged from Spec 3 design §11. `scripts/check-game-integration.mjs`
+already globs `games/*`. CI `determinism` job adds
+`pnpm --filter @stickworld/game-<slug> score:browser` per new package.
+
+---
+
+## 9. What this spec does not change
+
+- Competitive-spec championship formula
+- Replay magic `SWR1` / format version 1
+- Rapier pin
+- Auth button set (Google + email)
+- GameHost pause/ranked policy
+- Cheap-check 8 events/tick
+- Vendor cap (Neon + Railway)
+
+---
+
+## 10. Risks
 
 | Risk | Handling |
 |---|---|
-| Chain reactions diverge across runtimes | Determinism fixture at **maximum** body count, all four runtimes, before build proceeds |
-| Body count blows the mobile frame budget | Hard runtime cap, enforced, declared in the manifest |
-| Debris cleanup silently affects simulation | Despawn is deterministic and part of the simulation, never a cosmetic afterthought |
-| Replay exceeds budget | Inputs are only three launches; state is large but inputs are tiny. Budget should hold — verify early |
-| Spec 1 landed on Branch B2/B3 | Re-assess viability before build. Removing it from the launch roster is acceptable and preferable to shipping an unverifiable leaderboard |
+| Best-of accidentally becomes 3 `/v1` attempts | Phase machine in the sim; host tests still "one finish POST" |
+| Ragdoll diverges across browsers | Four-runtime Archery golden before extract |
+| Weekly seed issues a daily seed | Union + season_games row tests; championship ignore test |
+| Wave C replay > 40 KB | Fixture first; coarsen that game only |
+| Demolition chain reactions diverge | Max-body fixture; cut the game rather than bump Rapier |
+| Moving platforms smuggled into Pickaxe | Explicitly out; kit finding if a PR touches Pickaxe goldens |
+| GameHost change for best-of | Stop and review (ADR-0006 predicted none) |
 
 ---
 
-## 7. Open questions
+## 11. Closed questions (were design §7)
 
-1. Best-of-three semantics per game: highest single, or sum? Decide per game before its
-   leaderboard opens.
-2. Does Pogo Tower's weekly seed reuse the daily ladder's rotation machinery, or need its own?
-3. Should Wave C's medium replays be trimmed by lowering input sample granularity, or is the
-   budget comfortable as-is?
-4. If Demolition Dive is cut, does a tenth game replace it, or does the championship launch with
-   nine and a 9,000-point maximum?
+| # | Question | Decision |
+|---|---|---|
+| 1 | Best-of: max or sum? | **Sum** of three sub-scores. |
+| 2 | Pogo weekly vs daily rotator? | **Reuse** daily machinery; `weekly-seed` on issue. |
+| 3 | Pre-emptively coarsen Wave C input? | **No.** Fail the 40 KB fixture first. |
+| 4 | Demolition cut → replacement game? | **No.** Nine columns / 9,000 max. Branch A: keep trying. |
 
 ---
 
-## 8. Tasks
+## 12. Tasks
 
-| # | Task | Games | Plan ref |
-|---|---|---|---|
-| 1 | Wave A — projectile | Launch Lab, Ragdoll Archery Rush, Hammer Throw Havoc | 15 |
-| 2 | Wave B — seeded generation | Pogo Tower | 16 |
-| 3 | Wave C — continuous and vehicle | Rooftop Relay, Balance Bike Blitz, Cargo Chaos | 17 |
-| 4 | Wave D — destruction | Demolition Dive | 18 |
-
-Each game within a wave repeats the Spec 3 template and must clear the integration checklist as a
-merge gate. Sub-tasks written when this spec is deepened after Spec 3 lands.
+See `tasks.md`. Wave order is load-bearing. Do not start Wave B until Wave A
+exit evidence exists, and so on.
