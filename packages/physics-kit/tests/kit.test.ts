@@ -29,6 +29,15 @@ import {
   setKinematicAngle,
   setKinematicTranslation,
   stepMovingPlatform,
+  createBreakableCuboid,
+  fractureBreakable,
+  parkDespawn,
+  restoreBreakable,
+  propagateFractures,
+  runMaxBodyBreakableFixture,
+  MAX_BODY_CAP,
+  PARK_POSE,
+  ragdollParts,
 } from '../src/index.ts';
 
 describe('physics-kit factories', () => {
@@ -84,6 +93,16 @@ describe('physics-kit factories', () => {
     const ragdoll = createTenBodyRagdoll(sim, rapier, tags, 2, 1.4, true);
     expect(sim.registry.count()).toBeGreaterThanOrEqual(10);
     expect(ragdoll.joints).toBe(9);
+    expect(ragdollParts(ragdoll)).toHaveLength(10);
+    const brick = createBreakableCuboid(sim, rapier, 4, 1, 0.8, 0.25, 18, 40, tags, 'break-0');
+    fractureBreakable(brick, rapier, 1);
+    expect(brick.broken).toBe(true);
+    parkDespawn(brick);
+    expect(brick.parked).toBe(true);
+    expect(brick.body.translation().x).toBe(PARK_POSE.x);
+    restoreBreakable(brick, rapier);
+    expect(brick.broken).toBe(false);
+    expect(brick.body.translation().x).toBe(4);
     const planted = createPlantedCapsule(sim, rapier, 2, 2, 0.28, 0.16, 22, 0, tags, 'torso');
     expect(planted.body.isFixed()).toBe(false);
     const arrow = createDynamicCapsule(sim, rapier, 2.4, 2, 0.35, 0.03, 0.04, 0, tags, 'arrow');
@@ -105,5 +124,34 @@ describe('physics-kit factories', () => {
     );
     destroyImpulseJoint(sim.world, hinge);
     sim.free();
+  });
+
+  it('propagates a chain and never creates bodies after construction', async () => {
+    const rapier = await initRapier();
+    const sim = new SimWorld(rapier);
+    const tags = new Map<number, string>();
+    const a = createBreakableCuboid(sim, rapier, 0, 1, 0.8, 0.25, 18, 40, tags, 'a');
+    const b = createBreakableCuboid(sim, rapier, 1.7, 1, 0.8, 0.25, 18, 40, tags, 'b');
+    const striker = createDynamicCuboid(sim, rapier, -1.2, 1, 0.4, 0.4, 40, tags, 'striker');
+    launchImpulse(striker.body, { x: 1, y: 0 }, 30);
+    const constructed = sim.registry.count();
+    let fractured = 0;
+    for (let i = 0; i < 45; i++) {
+      sim.step();
+      fractured += propagateFractures(sim.world, rapier, [a, b], [striker.collider]).length;
+      expect(sim.registry.count()).toBe(constructed);
+    }
+    expect(fractured).toBeGreaterThan(0);
+    sim.free();
+  });
+
+  it('runs the 28-body fixture at the Demolition cap', async () => {
+    const rapier = await initRapier();
+    const result = runMaxBodyBreakableFixture(rapier);
+    expect(result.bodyCount).toBe(MAX_BODY_CAP);
+    expect(result.fractured).toBeGreaterThan(0);
+    expect(Object.keys(result.hashes)).toEqual(['1', '10', '30', '60']);
+    const again = runMaxBodyBreakableFixture(rapier);
+    expect(again.hashes).toEqual(result.hashes);
   });
 });

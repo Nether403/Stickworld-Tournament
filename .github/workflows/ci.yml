@@ -49,6 +49,7 @@ jobs:
           key: playwright-1.62.1-${{ runner.os }}
       - run: pnpm --filter @stickworld/sim-core exec playwright install --with-deps
       - run: pnpm determinism:browser
+      - run: pnpm --filter @stickworld/physics-kit score:browser
       # Bundle aliases sim-core to source; build is a backstop if a future
       # harness starts resolving workspace package exports again.
       - run: pnpm build

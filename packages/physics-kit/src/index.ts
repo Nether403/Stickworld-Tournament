@@ -1,4 +1,4 @@
-import { atan, hypot, sin, SimWorld, type RapierModule } from '@stickworld/sim-core';
+import { abs, atan, formatHash, hypot, sin, SimWorld, type RapierModule } from '@stickworld/sim-core';
 
 export type ColliderTags = Map<number, string>;
 
@@ -580,4 +580,266 @@ export function createTenBodyRagdoll(
     rShin,
     joints: 9,
   };
+}
+
+export function ragdollParts(ragdoll: TenBodyRagdoll): RagdollPart[] {
+  return [
+    ragdoll.torso,
+    ragdoll.head,
+    ragdoll.lUpper,
+    ragdoll.lLower,
+    ragdoll.rUpper,
+    ragdoll.rLower,
+    ragdoll.lThigh,
+    ragdoll.lShin,
+    ragdoll.rThigh,
+    ragdoll.rShin,
+  ];
+}
+
+export const FRACTURE_IMPULSE = 4;
+export const MAX_CHAIN_DEPTH = 3;
+export const PARK_POSE = { x: -10, y: -10 } as const;
+export const PLAY_AABB = { xMin: -2, yMin: -2, xMax: 22, yMax: 16 } as const;
+export const MAX_BODY_CAP = 28;
+export const MAX_BODY_CHECKPOINTS = [1, 10, 30, 60] as const;
+
+export type BreakableCollider = ReturnType<typeof createFixedCuboid>['collider'];
+export type BreakableBody = ReturnType<typeof createFixedCuboid>['body'];
+
+export interface BreakableCuboid {
+  body: BreakableBody;
+  collider: BreakableCollider;
+  authoredX: number;
+  authoredY: number;
+  authoredAngle: number;
+  value: number;
+  broken: boolean;
+  parked: boolean;
+  chainDepth: number;
+}
+
+export interface PlayAabb {
+  xMin: number;
+  yMin: number;
+  xMax: number;
+  yMax: number;
+}
+
+/** Fixed cuboid with mass so `setBodyType(Dynamic)` keeps a defined inertia. */
+export function createBreakableCuboid(
+  sim: SimWorld,
+  rapier: RapierModule,
+  x: number,
+  y: number,
+  hx: number,
+  hy: number,
+  mass: number,
+  value: number,
+  tags: ColliderTags,
+  name: string,
+): BreakableCuboid {
+  const body = sim.createRigidBody(rapier.RigidBodyDesc.fixed().setTranslation(x, y));
+  const collider = sim.world.createCollider(
+    rapier.ColliderDesc.cuboid(hx, hy).setMass(mass).setFriction(0.7).setRestitution(0.05),
+    body,
+  );
+  tagCollider(tags, collider, name);
+  return {
+    body,
+    collider,
+    authoredX: x,
+    authoredY: y,
+    authoredAngle: 0,
+    value,
+    broken: false,
+    parked: false,
+    chainDepth: 0,
+  };
+}
+
+export function maxManifoldImpulse(
+  world: SimWorld['world'],
+  a: BreakableCollider,
+  b: BreakableCollider,
+): number {
+  let peak = 0;
+  world.contactPair(a, b, (manifold) => {
+    const n = manifold.numContacts();
+    for (let i = 0; i < n; i++) {
+      const impulse = abs(manifold.contactImpulse(i));
+      if (impulse > peak) peak = impulse;
+    }
+  });
+  return peak;
+}
+
+export function fractureBreakable(piece: BreakableCuboid, rapier: RapierModule, depth: number): void {
+  if (piece.broken) return;
+  piece.broken = true;
+  piece.chainDepth = depth;
+  piece.body.setBodyType(rapier.RigidBodyType.Dynamic, true);
+}
+
+export function parkDespawn(piece: BreakableCuboid): void {
+  if (piece.parked) return;
+  piece.body.setLinvel({ x: 0, y: 0 }, true);
+  piece.body.setAngvel(0, true);
+  piece.body.setRotation(0, true);
+  piece.body.setTranslation({ x: PARK_POSE.x, y: PARK_POSE.y }, true);
+  piece.collider.setEnabled(false);
+  piece.parked = true;
+}
+
+export function restoreBreakable(piece: BreakableCuboid, rapier: RapierModule): void {
+  piece.collider.setEnabled(true);
+  piece.body.setBodyType(rapier.RigidBodyType.Fixed, true);
+  resetDynamicPose(piece.body, piece.authoredX, piece.authoredY, piece.authoredAngle);
+  piece.broken = false;
+  piece.parked = false;
+  piece.chainDepth = 0;
+}
+
+export function centreOutsideAabb(x: number, y: number, aabb: PlayAabb = PLAY_AABB): boolean {
+  return x < aabb.xMin || x > aabb.xMax || y < aabb.yMin || y > aabb.yMax;
+}
+
+/**
+ * Same-tick chain: ragdoll contacts seed depth 1, then breakable-breakable
+ * contacts raise neighbours up to `maxDepth`. Index order is the tie-break.
+ */
+export function propagateFractures(
+  world: SimWorld['world'],
+  rapier: RapierModule,
+  pieces: BreakableCuboid[],
+  ragdollColliders: BreakableCollider[],
+  threshold = FRACTURE_IMPULSE,
+  maxDepth = MAX_CHAIN_DEPTH,
+): Array<{ index: number; depth: number }> {
+  const n = pieces.length;
+  const depthOf: number[] = [];
+  for (let i = 0; i < n; i++) depthOf.push(0);
+  for (let i = 0; i < n; i++) {
+    const piece = pieces[i]!;
+    if (piece.broken || piece.parked) continue;
+    for (let r = 0; r < ragdollColliders.length; r++) {
+      if (maxManifoldImpulse(world, piece.collider, ragdollColliders[r]!) > threshold) {
+        depthOf[i] = 1;
+        break;
+      }
+    }
+  }
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (let i = 0; i < n; i++) {
+      const d = depthOf[i]!;
+      if (d === 0 || d >= maxDepth) continue;
+      const source = pieces[i]!;
+      if (source.broken || source.parked) continue;
+      for (let j = 0; j < n; j++) {
+        if (i === j) continue;
+        const neighbour = pieces[j]!;
+        if (neighbour.broken || neighbour.parked) continue;
+        if (maxManifoldImpulse(world, source.collider, neighbour.collider) <= threshold) continue;
+        const next = d + 1;
+        const current = depthOf[j]!;
+        if (next <= maxDepth && (current === 0 || next < current)) {
+          depthOf[j] = next;
+          changed = true;
+        }
+      }
+    }
+  }
+  const fractured: Array<{ index: number; depth: number }> = [];
+  for (let i = 0; i < n; i++) {
+    const depth = depthOf[i]!;
+    if (depth === 0) continue;
+    const piece = pieces[i]!;
+    if (piece.broken) continue;
+    fractureBreakable(piece, rapier, depth);
+    fractured.push({ index: i, depth });
+  }
+  return fractured;
+}
+
+export function despawnBrokenOutsideAabb(pieces: BreakableCuboid[], aabb: PlayAabb = PLAY_AABB): void {
+  for (let i = 0; i < pieces.length; i++) {
+    const piece = pieces[i]!;
+    if (!piece.broken || piece.parked) continue;
+    const pos = piece.body.translation();
+    if (centreOutsideAabb(pos.x, pos.y, aabb)) parkDespawn(piece);
+  }
+}
+
+export interface MaxBodyFixtureResult {
+  bodyCount: number;
+  hashes: Record<string, string>;
+  fractured: number;
+}
+
+/** 28-body Branch A fixture: 6 static + 12 breakables + 10 ragdoll. */
+export function runMaxBodyBreakableFixture(
+  rapier: RapierModule,
+  ticks = MAX_BODY_CHECKPOINTS[MAX_BODY_CHECKPOINTS.length - 1]!,
+): MaxBodyFixtureResult {
+  const sim = new SimWorld(rapier);
+  const tags = new Map<number, string>();
+  createFixedCuboid(sim, rapier, 10, 0.25, 12, 0.25, tags, 'floor');
+  createFixedCuboid(sim, rapier, 20, 8, 0.25, 10, tags, 'backstop');
+  createFixedCuboid(sim, rapier, -1.5, 8, 0.25, 10, tags, 'left-wall');
+  createFixedCuboid(sim, rapier, 10, 15.5, 12, 0.25, tags, 'ceiling');
+  createFixedCuboid(sim, rapier, 21.5, 8, 0.25, 8, tags, 'far-wall');
+  createFixedCuboid(sim, rapier, 16, 0.55, 1.5, 0.12, tags, 'step');
+
+  const xs = [8.4, 10.0, 11.6, 13.2];
+  const storeys = [
+    { y: 1.0, value: 40 },
+    { y: 3.0, value: 70 },
+    { y: 5.0, value: 110 },
+  ];
+  const pieces: BreakableCuboid[] = [];
+  for (let s = 0; s < storeys.length; s++) {
+    const storey = storeys[s]!;
+    for (let c = 0; c < xs.length; c++) {
+      pieces.push(
+        createBreakableCuboid(
+          sim,
+          rapier,
+          xs[c]!,
+          storey.y,
+          0.8,
+          0.25,
+          18,
+          storey.value,
+          tags,
+          `break-${pieces.length}`,
+        ),
+      );
+    }
+  }
+
+  const ragdoll = createTenBodyRagdoll(sim, rapier, tags, 2.0, 12.0, false);
+  const parts = ragdollParts(ragdoll);
+  const ragdollColliders = parts.map((part) => part.collider);
+  launchImpulse(ragdoll.torso.body, { x: 1, y: -0.45 }, 22);
+  for (let i = 1; i < parts.length; i++) {
+    launchImpulse(parts[i]!.body, { x: 1, y: -0.45 }, 22);
+  }
+
+  const bodyCount = sim.registry.count();
+  const hashes: Record<string, string> = {};
+  let fractured = 0;
+  for (let t = 0; t < ticks; t++) {
+    sim.step();
+    const newly = propagateFractures(sim.world, rapier, pieces, ragdollColliders);
+    fractured += newly.length;
+    despawnBrokenOutsideAabb(pieces);
+    const tick = t + 1;
+    for (let c = 0; c < MAX_BODY_CHECKPOINTS.length; c++) {
+      if (MAX_BODY_CHECKPOINTS[c] === tick) hashes[String(tick)] = formatHash(sim.stateHash());
+    }
+  }
+  sim.free();
+  return { bodyCount, hashes, fractured };
 }

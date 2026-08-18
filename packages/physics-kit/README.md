@@ -34,6 +34,9 @@ Task 2 must not regenerate those files.
 - `createWheelAssembly` (spring rest 0.32 m; prismatic would lock wheel spin) — Balance Bike
 - `createCargoCondition` integer 0–100 — Cargo Chaos
 
-## Later waves (not yet in this package until a consumer proves them)
+## Spec 4 Wave D
 
-Breakables wait for Demolition Dive.
+- `createBreakableCuboid` / `fractureBreakable` / `parkDespawn` / `restoreBreakable`
+- `propagateFractures` — same-tick chain, depth cap 3, index order
+- `runMaxBodyBreakableFixture` — 28 bodies, four-runtime hashes before Phaser
+- Rapier stays `0.20.0` `-compat`. Never `destroyRigidBody`.
