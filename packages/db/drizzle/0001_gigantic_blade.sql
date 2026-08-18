@@ -1,0 +1,1 @@
+ALTER TABLE "ranking_dirty" ALTER COLUMN "dirty_at" DROP NOT NULL;

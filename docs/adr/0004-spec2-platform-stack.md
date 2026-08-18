@@ -58,3 +58,20 @@ Neon CLI `neon-auth oauth-provider` `--provider-id` values: `google`, `github`,
   (custom OAuth app) rather than Discord.
 - Ranked gameplay in Spec 2 is Test Chamber only. Shipping titles arrive in
   Specs 3–4 via the same `game_versions` pin.
+
+## Project (2026-08-18)
+
+Neon project `still-mouse-62565389` (org Nether). Production compute
+`suspend_timeout_seconds = 0` (autosuspend off), confirmed on the default
+endpoint.
+
+Managed Auth is provisioned. Email/password is **disabled**. Google uses
+Neon shared credentials in development. GitHub is in the client UI but
+requires a GitHub OAuth app in the Neon console (`add_oauth_provider`
+rejects shared GitHub). Neon Auth's bundled sender exists
+(`auth@mail.myneon.app`); Spec 2 still does not use email.
+
+CI job `schema` needs repository secrets `NEON_API_KEY` and
+`NEON_PROJECT_ID=still-mouse-62565389`. Forks skip when those are missing;
+this repository fails the job if they are unset. GitHub OAuth is a Neon
+console credential paste — shared GitHub is not offered.
