@@ -13,25 +13,25 @@ regenerate. Game docs in `docs/games/*.md` still win for sim numbers.
 **Objective:** provenance and a generate path that cannot leak into
 runtime. Shipped files are committed. Plan ref 19.
 
-- [ ] 1.1 `sources/brand/` human logo + wordmark (SVG). Copy to
+- [x] 1.1 `sources/brand/` human logo + wordmark (SVG). Copy to
       `apps/web/public/assets/brand/`. Catalogue / auth header uses them.
       Class `human` in the ledger. _(R1.7)_
-- [ ] 1.2 `docs/assets/prompts/` at least one YAML (badge or background)
+- [x] 1.2 `docs/assets/prompts/` at least one YAML (badge or background)
       with `provider`, `model`, `prompt`. `scripts/assets-build.mjs` + root
       `pnpm assets:build`: no keys → exit 0 with "skipped"; keys present →
       write `assets/generated/` only. _(R1.1, R1.5, ADR-0007.3)_
-- [ ] 1.3 `docs/assets/ledger.md` + `scripts/check-asset-ledger.mjs`. CI
+- [x] 1.3 `docs/assets/ledger.md` + `scripts/check-asset-ledger.mjs`. CI
       `verify` runs it. Every `apps/web/public/assets/**` file listed;
       SHA-256 matches. _(R1.6)_
-- [ ] 1.4 `scripts/check-no-runtime-ai.mjs` greps built `apps/web/.next`
+- [x] 1.4 `scripts/check-no-runtime-ai.mjs` greps built `apps/web/.next`
       (after `pnpm --filter @stickworld/web build`) and `apps/worker/dist`
       plus `games/*/dist` if present for hostnames in design §3. Add to
       `verify`. Playwright: `/play/hookline-sprint` practice records
       requests; banned hosts count 0. _(R1.2)_
-- [ ] 1.5 Confirm no `games/*/src/simulation/**` import from `public/assets`.
+- [x] 1.5 Confirm no `games/*/src/simulation/**` import from `public/assets`.
       Contract tests still green; Hookline/Pickaxe hashes unchanged. _(R1.4,
       R1.8)_
-- [ ] 1.6 Voice: either commit one short SFX under `public/assets/sfx/`
+- [x] 1.6 Voice: either commit one short SFX under `public/assets/sfx/`
       with ledger class `human` or `generated-then-human-edited`, or ship
       silent and note "no VO" in known-issues. Do not block on Deepgram.
       _(R1.9)_
