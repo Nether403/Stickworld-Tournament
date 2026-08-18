@@ -11,6 +11,8 @@ import {
   type Database,
 } from '@stickworld/db';
 import { testChamberGame } from '@stickworld/game-test-chamber';
+import { hooklineSprintGame } from '@stickworld/game-hookline-sprint';
+import { pickaxeAscentGame } from '@stickworld/game-pickaxe-ascent';
 import { decodeReplay, packGameVersion, type ReplayHeader } from '@stickworld/replay';
 import {
   BudgetExceededError,
@@ -28,7 +30,11 @@ import { markSeasonDirty } from './recompute.js';
 import type { ReasonCode } from './reason-codes.js';
 import { unpackSeed, uuidToBytes } from './seed128.js';
 
-const GAMES = new Map<number, StickworldGame>([[0, testChamberGame]]);
+const GAMES = new Map<number, StickworldGame>([
+  [0, testChamberGame],
+  [1, hooklineSprintGame],
+  [2, pickaxeAscentGame],
+]);
 
 function hexPrefix(hex: string): Buffer {
   return Buffer.from(hex.slice(0, 16), 'hex');

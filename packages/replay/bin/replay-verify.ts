@@ -10,14 +10,34 @@ if (!file) {
 }
 
 async function loadGame(registryId: number): Promise<StickworldGame | undefined> {
-  if (registryId !== 0) return undefined;
-  const url = new URL('../../../game-test-chamber/dist/index.js', import.meta.url);
-  try {
-    const mod = (await import(url.href)) as { testChamberGame: StickworldGame };
-    return mod.testChamberGame;
-  } catch {
-    return undefined;
+  if (registryId === 0) {
+    const url = new URL('../../../game-test-chamber/dist/index.js', import.meta.url);
+    try {
+      const mod = (await import(url.href)) as { testChamberGame: StickworldGame };
+      return mod.testChamberGame;
+    } catch {
+      return undefined;
+    }
   }
+  if (registryId === 1) {
+    const url = new URL('../../../../games/hookline-sprint/dist/index.js', import.meta.url);
+    try {
+      const mod = (await import(url.href)) as { hooklineSprintGame: StickworldGame };
+      return mod.hooklineSprintGame;
+    } catch {
+      return undefined;
+    }
+  }
+  if (registryId === 2) {
+    const url = new URL('../../../../games/pickaxe-ascent/dist/index.js', import.meta.url);
+    try {
+      const mod = (await import(url.href)) as { pickaxeAscentGame: StickworldGame };
+      return mod.pickaxeAscentGame;
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
 }
 
 const bytes = new Uint8Array(await readFile(file));

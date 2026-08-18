@@ -3,6 +3,11 @@
 **Status:** accepted for Spec 2 deepening (2026-08-18)
 **Spec:** 2
 
+**Amendment (2026-08-18):** After Spec 2 merged, email signup was enabled on
+Neon Auth and GitHub was deferred. Spec 3 UI follows
+`docs/adr/0005-spec3-game-host-and-auth.md`. Decisions 6–7 below remain a
+correct description of Spec 2 as executed; they are not the Spec 3 button set.
+
 ## Context
 
 Spec 2's scope draft left five open questions. Spec 1 landed on Branch A, so the

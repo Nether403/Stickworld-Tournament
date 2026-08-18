@@ -53,9 +53,24 @@ importers:
       '@stickworld/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@stickworld/game-hookline-sprint':
+        specifier: workspace:*
+        version: link:../../games/hookline-sprint
+      '@stickworld/game-host':
+        specifier: workspace:*
+        version: link:../../packages/game-host
+      '@stickworld/game-pickaxe-ascent':
+        specifier: workspace:*
+        version: link:../../games/pickaxe-ascent
       '@stickworld/platform':
         specifier: workspace:*
         version: link:../../packages/platform
+      '@stickworld/sim-core':
+        specifier: workspace:*
+        version: link:../../packages/sim-core
+      '@stickworld/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       drizzle-orm:
         specifier: 0.45.2
         version: 0.45.2(@types/pg@8.23.1)(kysely@0.29.5)(pg@8.23.0)
@@ -65,6 +80,9 @@ importers:
       pg:
         specifier: 8.23.0
         version: 8.23.0
+      phaser:
+        specifier: 4.2.1
+        version: 4.2.1
       react:
         specifier: 19.2.8
         version: 19.2.8
@@ -72,6 +90,9 @@ importers:
         specifier: 19.2.8
         version: 19.2.8(react@19.2.8)
     devDependencies:
+      '@playwright/test':
+        specifier: 1.62.1
+        version: 1.62.1
       '@types/node':
         specifier: 22.19.21
         version: 22.19.21
@@ -93,6 +114,12 @@ importers:
       '@stickworld/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@stickworld/game-hookline-sprint':
+        specifier: workspace:*
+        version: link:../../games/hookline-sprint
+      '@stickworld/game-pickaxe-ascent':
+        specifier: workspace:*
+        version: link:../../games/pickaxe-ascent
       '@stickworld/platform':
         specifier: workspace:*
         version: link:../../packages/platform
@@ -106,6 +133,92 @@ importers:
       '@types/node':
         specifier: 22.19.21
         version: 22.19.21
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 3.2.7
+        version: 3.2.7(@types/node@22.19.21)(tsx@4.23.12)
+
+  games/hookline-sprint:
+    dependencies:
+      '@stickworld/game-host':
+        specifier: workspace:*
+        version: link:../../packages/game-host
+      '@stickworld/input':
+        specifier: workspace:*
+        version: link:../../packages/input
+      '@stickworld/physics-kit':
+        specifier: workspace:*
+        version: link:../../packages/physics-kit
+      '@stickworld/replay':
+        specifier: workspace:*
+        version: link:../../packages/replay
+      '@stickworld/scoring':
+        specifier: workspace:*
+        version: link:../../packages/scoring
+      '@stickworld/sim-core':
+        specifier: workspace:*
+        version: link:../../packages/sim-core
+      phaser:
+        specifier: 4.2.1
+        version: 4.2.1
+    devDependencies:
+      '@playwright/test':
+        specifier: 1.62.1
+        version: 1.62.1
+      '@stickworld/config-ts':
+        specifier: workspace:*
+        version: link:../../packages/config-ts
+      '@stickworld/game-test-chamber':
+        specifier: workspace:*
+        version: link:../../packages/game-test-chamber
+      esbuild:
+        specifier: 0.28.2
+        version: 0.28.2
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 3.2.7
+        version: 3.2.7(@types/node@22.19.21)(tsx@4.23.12)
+
+  games/pickaxe-ascent:
+    dependencies:
+      '@stickworld/game-host':
+        specifier: workspace:*
+        version: link:../../packages/game-host
+      '@stickworld/input':
+        specifier: workspace:*
+        version: link:../../packages/input
+      '@stickworld/physics-kit':
+        specifier: workspace:*
+        version: link:../../packages/physics-kit
+      '@stickworld/replay':
+        specifier: workspace:*
+        version: link:../../packages/replay
+      '@stickworld/scoring':
+        specifier: workspace:*
+        version: link:../../packages/scoring
+      '@stickworld/sim-core':
+        specifier: workspace:*
+        version: link:../../packages/sim-core
+      phaser:
+        specifier: 4.2.1
+        version: 4.2.1
+    devDependencies:
+      '@playwright/test':
+        specifier: 1.62.1
+        version: 1.62.1
+      '@stickworld/config-ts':
+        specifier: workspace:*
+        version: link:../../packages/config-ts
+      '@stickworld/game-test-chamber':
+        specifier: workspace:*
+        version: link:../../packages/game-test-chamber
+      esbuild:
+        specifier: 0.28.2
+        version: 0.28.2
       typescript:
         specifier: 5.9.3
         version: 5.9.3
@@ -171,6 +284,31 @@ importers:
         specifier: 3.2.7
         version: 3.2.7(@types/node@22.19.21)(tsx@4.23.12)
 
+  packages/game-host:
+    dependencies:
+      '@stickworld/input':
+        specifier: workspace:*
+        version: link:../input
+      '@stickworld/replay':
+        specifier: workspace:*
+        version: link:../replay
+      '@stickworld/sim-core':
+        specifier: workspace:*
+        version: link:../sim-core
+      '@stickworld/telemetry':
+        specifier: workspace:*
+        version: link:../telemetry
+    devDependencies:
+      '@stickworld/config-ts':
+        specifier: workspace:*
+        version: link:../config-ts
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 3.2.7
+        version: 3.2.7(@types/node@22.19.21)(tsx@4.23.12)
+
   packages/game-test-chamber:
     dependencies:
       '@stickworld/replay':
@@ -196,11 +334,45 @@ importers:
         specifier: 3.2.7
         version: 3.2.7(@types/node@22.19.21)(tsx@4.23.12)
 
+  packages/input:
+    devDependencies:
+      '@stickworld/config-ts':
+        specifier: workspace:*
+        version: link:../config-ts
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 3.2.7
+        version: 3.2.7(@types/node@22.19.21)(tsx@4.23.12)
+
+  packages/physics-kit:
+    dependencies:
+      '@stickworld/sim-core':
+        specifier: workspace:*
+        version: link:../sim-core
+    devDependencies:
+      '@stickworld/config-ts':
+        specifier: workspace:*
+        version: link:../config-ts
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 3.2.7
+        version: 3.2.7(@types/node@22.19.21)(tsx@4.23.12)
+
   packages/platform:
     dependencies:
       '@stickworld/db':
         specifier: workspace:*
         version: link:../db
+      '@stickworld/game-hookline-sprint':
+        specifier: workspace:*
+        version: link:../../games/hookline-sprint
+      '@stickworld/game-pickaxe-ascent':
+        specifier: workspace:*
+        version: link:../../games/pickaxe-ascent
       '@stickworld/game-test-chamber':
         specifier: workspace:*
         version: link:../game-test-chamber
@@ -267,6 +439,22 @@ importers:
         specifier: 3.2.7
         version: 3.2.7(@types/node@22.19.21)(tsx@4.23.12)
 
+  packages/scoring:
+    dependencies:
+      '@stickworld/sim-core':
+        specifier: workspace:*
+        version: link:../sim-core
+    devDependencies:
+      '@stickworld/config-ts':
+        specifier: workspace:*
+        version: link:../config-ts
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 3.2.7
+        version: 3.2.7(@types/node@22.19.21)(tsx@4.23.12)
+
   packages/sim-core:
     dependencies:
       '@dimforge/rapier2d-compat':
@@ -288,6 +476,34 @@ importers:
       vitest:
         specifier: 3.2.7
         version: 3.2.7(@types/node@22.19.21)(tsx@4.23.12)
+
+  packages/telemetry:
+    devDependencies:
+      '@stickworld/config-ts':
+        specifier: workspace:*
+        version: link:../config-ts
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 3.2.7
+        version: 3.2.7(@types/node@22.19.21)(tsx@4.23.12)
+
+  packages/ui:
+    dependencies:
+      react:
+        specifier: 19.2.8
+        version: 19.2.8
+    devDependencies:
+      '@stickworld/config-ts':
+        specifier: workspace:*
+        version: link:../config-ts
+      '@types/react':
+        specifier: 19.2.18
+        version: 19.2.18
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
 
 packages:
 
@@ -2762,6 +2978,9 @@ packages:
     resolution: {integrity: sha512-kVscqXk4OCp68SZ0dkgEKVi6/8ij300KBWTJq32P/dYeWTSwK41WyTxalN1eRmA5Z9UU/LX9D7FWSmV9SAYx6g==}
     engines: {node: '>=0.10.0'}
 
+  eventemitter3@5.0.4:
+    resolution: {integrity: sha512-mlsTRyGaPBjPedk6Bvw+aqbsXDtoAyAzm5MO7JgU+yVRyMQ5O8bD4Kcci7BS85f93veegeCPkL8R4GLClnjLFw==}
+
   eventsource-parser@3.1.1:
     resolution: {integrity: sha512-EKN1vKAMcZ8MlYMpaNuxN6R9yakzH6uajHcHVTqWJzvu5pWw9DyhbP35HH8MVBQ+dZjAfDxk+A8NiR9KWaXiyQ==}
     engines: {node: '>=18.0.0'}
@@ -3085,6 +3304,9 @@ packages:
 
   pgpass@1.0.5:
     resolution: {integrity: sha512-FdW9r/jQZhSeohs1Z3sI1yxFQNFvMcnmfuj4WBMUTxOrAyLMaTcE1aAMBiTlbMNaXvBCQuVi0R7hd8udDSP7ug==}
+
+  phaser@4.2.1:
+    resolution: {integrity: sha512-WUNwCPJpdjvZiuT6SgCfYVW8Qw/3j0jJ4ws7P2QkhFLFu74sbGuyHJcbFueGkY/AYO4Pi47bNQXn1OCJeLX//w==}
 
   picocolors@1.1.1:
     resolution: {integrity: sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==}
@@ -5715,6 +5937,8 @@ snapshots:
 
   esutils@2.0.3: {}
 
+  eventemitter3@5.0.4: {}
+
   eventsource-parser@3.1.1: {}
 
   eventsource@4.1.1:
@@ -5992,6 +6216,10 @@ snapshots:
   pgpass@1.0.5:
     dependencies:
       split2: 4.2.0
+
+  phaser@4.2.1:
+    dependencies:
+      eventemitter3: 5.0.4
 
   picocolors@1.1.1: {}
 

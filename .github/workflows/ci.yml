@@ -21,7 +21,10 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
+      - run: node scripts/check-forbidden-names.mjs
+      - run: node scripts/check-game-integration.mjs
       - run: pnpm build
+      - run: node scripts/check-play-bundle.mjs
       - run: pnpm typecheck
       - run: pnpm test
 
@@ -50,6 +53,9 @@ jobs:
       # harness starts resolving workspace package exports again.
       - run: pnpm build
       - run: pnpm --filter @stickworld/game-test-chamber score:browser
+      - run: pnpm --filter @stickworld/game-hookline-sprint score:browser
+      - run: pnpm --filter @stickworld/game-pickaxe-ascent score:browser
+      - run: pnpm --filter @stickworld/web e2e
 
   negative:
     name: negative

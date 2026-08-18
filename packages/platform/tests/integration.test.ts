@@ -184,9 +184,10 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
 
     const season = await db.select().from(seasons).where(eq(seasons.slug, 'ci')).then((r) => r[0]);
     const sg = await db
-      .select()
+      .select({ id: seasonGames.id })
       .from(seasonGames)
-      .where(eq(seasonGames.seedPolicy, 'fixed-course'))
+      .innerJoin(games, eq(games.id, seasonGames.gameId))
+      .where(and(eq(games.slug, 'test-chamber'), eq(seasonGames.seedPolicy, 'fixed-course')))
       .then((r) => r[0]);
     await recomputeSeason(db, issueCtx.clock, season!.id, { force: true });
     const board = await readLeaderboard(db, season!.id, sg!.id, { viewerUserId: profile.userId });
@@ -404,9 +405,10 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
   it('keeps a worse verified score from replacing a personal best', async () => {
     const profile = await upsertProfile(db, `auth-${randomUUID()}`);
     const sg = await db
-      .select()
+      .select({ id: seasonGames.id })
       .from(seasonGames)
-      .where(eq(seasonGames.seedPolicy, 'fixed-course'))
+      .innerJoin(games, eq(games.id, seasonGames.gameId))
+      .where(and(eq(games.slug, 'test-chamber'), eq(seasonGames.seedPolicy, 'fixed-course')))
       .then((r) => r[0]);
     await insertVerifiedBest(db, profile.userId, sg!.id, 500n);
     await insertVerifiedBest(db, profile.userId, sg!.id, 100n);
@@ -505,9 +507,10 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
     const day1 = new Date('2026-08-18T12:00:00.000Z');
     await rotateDaily(db, { randomBytes: (n) => randomBytes(n) }, day1);
     const dailySg = await db
-      .select()
+      .select({ id: seasonGames.id })
       .from(seasonGames)
-      .where(eq(seasonGames.seedPolicy, 'daily-seed'))
+      .innerJoin(games, eq(games.id, seasonGames.gameId))
+      .where(and(eq(games.slug, 'test-chamber'), eq(seasonGames.seedPolicy, 'daily-seed')))
       .then((r) => r[0]);
     const todayBoard = await db
       .select()
@@ -557,6 +560,141 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
         ip: '11.0.0.9',
       }),
     ).rejects.toMatchObject({ code: 'DAILY_CAP' });
+  });
+
+  it('verifies the Hookline Sprint golden replay', async () => {
+    const fixturePath = resolve(
+      fileURLToPath(import.meta.url),
+      '../../../../games/hookline-sprint/fixtures/sample.swr',
+    );
+    const goldenPath = resolve(
+      fileURLToPath(import.meta.url),
+      '../../../../games/hookline-sprint/conformance/golden/sample.json',
+    );
+    const hooklineBytes = readFileSync(fixturePath);
+    const golden = JSON.parse(readFileSync(goldenPath, 'utf8')) as { score: number; hash: string };
+    const profile = await upsertProfile(db, `auth-${randomUUID()}`);
+    await claimHandle(db, c.clock, profile.userId, `k${randomUUID().slice(0, 8)}`);
+    const issueCtx = goldenEntropy();
+    const issued = await issueAttempt(db, issueCtx, {
+      userId: profile.userId,
+      gameSlug: 'hookline-sprint',
+      seedPolicy: 'fixed-course',
+      ip: '10.0.1.2',
+    });
+    expect(issued.seed).toEqual([5, 6, 7, 8]);
+    const decoded = await decodeReplay(hooklineBytes);
+    expect(decoded.ok).toBe(true);
+    if (!decoded.ok) return;
+    const replay = await encodeReplay(
+      { ...decoded.header, attemptId: uuidToBytes(issued.attemptId) },
+      decoded.events,
+    );
+    const finished = await finishAttempt(db, issueCtx, {
+      userId: profile.userId,
+      attemptId: issued.attemptId,
+      token: issued.token,
+      replayB64: Buffer.from(replay).toString('base64'),
+      claimedScore: String(golden.score),
+    });
+    expect(finished.status).toBe('pending');
+    await processNextJob(db, issueCtx.clock, 'worker-hookline', { staleLockSeconds: 0 });
+    const sub = await db
+      .select()
+      .from(scoreSubmissions)
+      .where(eq(scoreSubmissions.runId, finished.runId))
+      .then((r) => r[0]);
+    expect(sub?.verificationStatus).toBe('verified');
+    expect(sub?.verifiedScore).toBe(BigInt(golden.score));
+  });
+
+  it('rejects an inflated Hookline claimed score with SCORE_MISMATCH', async () => {
+    const fixturePath = resolve(
+      fileURLToPath(import.meta.url),
+      '../../../../games/hookline-sprint/fixtures/sample.swr',
+    );
+    const goldenPath = resolve(
+      fileURLToPath(import.meta.url),
+      '../../../../games/hookline-sprint/conformance/golden/sample.json',
+    );
+    const hooklineBytes = readFileSync(fixturePath);
+    const golden = JSON.parse(readFileSync(goldenPath, 'utf8')) as { score: number };
+    const profile = await upsertProfile(db, `auth-${randomUUID()}`);
+    await claimHandle(db, c.clock, profile.userId, `m${randomUUID().slice(0, 8)}`);
+    const issueCtx = goldenEntropy();
+    const issued = await issueAttempt(db, issueCtx, {
+      userId: profile.userId,
+      gameSlug: 'hookline-sprint',
+      seedPolicy: 'fixed-course',
+      ip: '10.0.1.3',
+    });
+    const decoded = await decodeReplay(hooklineBytes);
+    if (!decoded.ok) throw new Error('fixture');
+    const replay = await encodeReplay(
+      { ...decoded.header, attemptId: uuidToBytes(issued.attemptId) },
+      decoded.events,
+    );
+    const finished = await finishAttempt(db, issueCtx, {
+      userId: profile.userId,
+      attemptId: issued.attemptId,
+      token: issued.token,
+      replayB64: Buffer.from(replay).toString('base64'),
+      claimedScore: String(golden.score + 1),
+    });
+    await processNextJob(db, issueCtx.clock, 'worker-hookline-bad', { staleLockSeconds: 0 });
+    const sub = await db
+      .select()
+      .from(scoreSubmissions)
+      .where(eq(scoreSubmissions.runId, finished.runId))
+      .then((r) => r[0]);
+    expect(sub?.verificationStatus).toBe('rejected');
+    expect(sub?.reasonCode).toBe('SCORE_MISMATCH');
+  });
+
+  it('verifies the Pickaxe Ascent golden replay', async () => {
+    const fixturePath = resolve(
+      fileURLToPath(import.meta.url),
+      '../../../../games/pickaxe-ascent/fixtures/sample.swr',
+    );
+    const goldenPath = resolve(
+      fileURLToPath(import.meta.url),
+      '../../../../games/pickaxe-ascent/conformance/golden/sample.json',
+    );
+    const bytes = readFileSync(fixturePath);
+    const golden = JSON.parse(readFileSync(goldenPath, 'utf8')) as { score: number; hash: string };
+    const profile = await upsertProfile(db, `auth-${randomUUID()}`);
+    await claimHandle(db, c.clock, profile.userId, `p${randomUUID().slice(0, 8)}`);
+    const issueCtx = goldenEntropy();
+    const issued = await issueAttempt(db, issueCtx, {
+      userId: profile.userId,
+      gameSlug: 'pickaxe-ascent',
+      seedPolicy: 'fixed-course',
+      ip: '10.0.2.2',
+    });
+    expect(issued.seed).toEqual([5, 6, 7, 8]);
+    const decoded = await decodeReplay(bytes);
+    expect(decoded.ok).toBe(true);
+    if (!decoded.ok) return;
+    const replay = await encodeReplay(
+      { ...decoded.header, attemptId: uuidToBytes(issued.attemptId) },
+      decoded.events,
+    );
+    const finished = await finishAttempt(db, issueCtx, {
+      userId: profile.userId,
+      attemptId: issued.attemptId,
+      token: issued.token,
+      replayB64: Buffer.from(replay).toString('base64'),
+      claimedScore: String(golden.score),
+    });
+    expect(finished.status).toBe('pending');
+    await processNextJob(db, issueCtx.clock, 'worker-pickaxe', { staleLockSeconds: 0 });
+    const sub = await db
+      .select()
+      .from(scoreSubmissions)
+      .where(eq(scoreSubmissions.runId, finished.runId))
+      .then((r) => r[0]);
+    expect(sub?.verificationStatus).toBe('verified');
+    expect(sub?.verifiedScore).toBe(BigInt(golden.score));
   });
 });
 

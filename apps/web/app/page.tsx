@@ -30,6 +30,44 @@ export default async function HomePage(): Promise<ReactNode> {
           <Link href="/auth/sign-in">Sign in</Link>
         </p>
       )}
+      <section aria-label="Game catalogue">
+        <article>
+          <h2>Hookline Sprint</h2>
+          <p>Attach, swing, and release. Race the line without falling.</p>
+          <p>
+            <Link href="/play/hookline-sprint">Practice</Link>
+            {signedIn ? (
+              <>
+                {' '}
+                <Link href="/play/hookline-sprint?mode=ranked">Ranked</Link>
+              </>
+            ) : (
+              <>
+                {' '}
+                <Link href="/auth/sign-in">Sign in to play ranked</Link>
+              </>
+            )}
+          </p>
+        </article>
+        <article>
+          <h2>Pickaxe Ascent</h2>
+          <p>Bite a ledge, swing, and climb the shaft.</p>
+          <p>
+            <Link href="/play/pickaxe-ascent">Practice</Link>
+            {signedIn ? (
+              <>
+                {' '}
+                <Link href="/play/pickaxe-ascent?mode=ranked">Ranked</Link>
+              </>
+            ) : (
+              <>
+                {' '}
+                <Link href="/auth/sign-in">Sign in to play ranked</Link>
+              </>
+            )}
+          </p>
+        </article>
+      </section>
     </main>
   );
 }

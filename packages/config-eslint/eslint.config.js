@@ -31,7 +31,13 @@ export default tseslint.config(
     },
   },
   {
-    files: ['packages/sim-core/src/**/*.ts', '**/simulation/**/*.ts'],
+    files: [
+      'packages/sim-core/src/**/*.ts',
+      'packages/game-test-chamber/src/**/*.ts',
+      'packages/physics-kit/src/**/*.ts',
+      'packages/scoring/src/**/*.ts',
+      '**/simulation/**/*.ts',
+    ],
     plugins: { stickworld },
     rules: {
       'stickworld/no-nondeterminism': 'error',
