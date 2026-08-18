@@ -6,7 +6,13 @@ export default function AuthPage() {
   return (
     <main>
       <h1>Sign in</h1>
-      <p>Google works in development with Neon shared credentials. GitHub needs an OAuth app in the Neon console.</p>
+      <p>
+        Google works in development with Neon shared credentials. GitHub needs a
+        GitHub <strong>OAuth App</strong> (Developer settings, not a GitHub App).
+        Homepage URL can be the repo or localhost; the Authorization callback URL
+        is Neon&apos;s <code>/callback/github</code>, not this page. Paste the
+        Client ID and secret into Neon Auth.
+      </p>
       <p>
         <button
           type="button"

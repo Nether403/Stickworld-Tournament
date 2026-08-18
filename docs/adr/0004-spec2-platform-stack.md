@@ -71,7 +71,26 @@ requires a GitHub OAuth app in the Neon console (`add_oauth_provider`
 rejects shared GitHub). Neon Auth's bundled sender exists
 (`auth@mail.myneon.app`); Spec 2 still does not use email.
 
-CI job `schema` needs repository secrets `NEON_API_KEY` and
-`NEON_PROJECT_ID=still-mouse-62565389`. Forks skip when those are missing;
-this repository fails the job if they are unset. GitHub OAuth is a Neon
-console credential paste — shared GitHub is not offered.
+CI job `schema` needs **GitHub Actions repository secrets** (Settings →
+Secrets and variables → Actions), named exactly `NEON_API_KEY` and
+`NEON_PROJECT_ID=still-mouse-62565389`. Environment-scoped secrets are not
+read unless the job declares `environment:`. Forks skip when those are
+missing; this repository fails the job if they are unset.
+
+## GitHub OAuth without a production homepage
+
+Create an **OAuth App** at [GitHub Developer settings → OAuth apps](https://github.com/settings/developers)
+(`New OAuth App`). Do **not** create a GitHub App. Neon Auth has no shared
+GitHub credentials; after the OAuth App exists, paste Client ID and Client
+Secret into Neon Console → project `still-mouse-62565389` → branch `main` →
+Auth. Three different URLs are involved:
+
+| Field | Where | Value for this project |
+|---|---|---|
+| **Homepage URL** | GitHub OAuth App form | Consent-screen metadata only. GitHub requires it; it is not the OAuth redirect. Use `https://github.com/Nether403/Stickworld-Tournament` now (or `http://localhost:3000`). A deployed Railway URL is not required. |
+| **Authorization callback URL** | GitHub OAuth App form | Neon handshake target: `{NEON_AUTH_BASE_URL}/callback/github` → `https://ep-flat-recipe-awcvm0td.neonauth.c-12.us-east-1.aws.neon.tech/neondb/auth/callback/github` |
+| **`callbackURL`** | `signIn.social({ callbackURL: '/' })` | Where the browser lands **after** Neon finishes. Localhost is pre-approved (`allow_localhost: true`). A production origin must be added to Neon Auth trusted domains later. |
+
+Do not put `/`, localhost, or `app/api/auth/...` in GitHub's Authorization
+callback URL. Google shared credentials are enough for Spec 2 local ranked
+play until GitHub credentials are pasted.
