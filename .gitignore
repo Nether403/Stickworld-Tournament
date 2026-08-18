@@ -1,0 +1,143 @@
+# ---------------------------------------------------------------------------
+# SECRETS — this block must never be relaxed.
+#
+# The workspace contains real credentials (Neon, Railway, Gemini/Vertex,
+# Deepgram, OpenRouter, and a GCP service-account key). Nothing in this block
+# may ever be committed. Secrets belong in Railway / Neon environment
+# variables, not in the repository.
+#
+# Verify with:  git check-ignore -v Credentials/.env
+# ---------------------------------------------------------------------------
+
+# The whole credentials directory, wherever it appears
+Credentials/
+credentials/
+**/Credentials/
+**/credentials/
+
+# Dotenv in every form
+.env
+.env.*
+*.env
+!.env.example
+!.env.*.example
+
+# GCP / Google service-account keys.
+# The known key in this workspace is Credentials/project-<uuid>.json, but these
+# patterns catch the general shape wherever such a file lands.
+*service-account*.json
+*serviceaccount*.json
+*-service-account-*.json
+gcp-*.json
+project-*-*-*-*-*.json
+application_default_credentials.json
+gha-creds-*.json
+
+# Private keys, certificates, keystores
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+!**/fixtures/**/*.key
+
+# Cloud / tooling credential caches
+.gcloud/
+.aws/
+.railway/
+.neon/
+.vercel/
+
+# ---------------------------------------------------------------------------
+# Node / pnpm
+# ---------------------------------------------------------------------------
+node_modules/
+.pnpm-store/
+.pnpm-debug.log*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.npmrc.local
+
+# ---------------------------------------------------------------------------
+# Turborepo
+# ---------------------------------------------------------------------------
+.turbo/
+**/.turbo/
+
+# ---------------------------------------------------------------------------
+# Build output
+# ---------------------------------------------------------------------------
+dist/
+build/
+out/
+.next/
+.nuxt/
+.output/
+*.tsbuildinfo
+.tscache/
+
+# ---------------------------------------------------------------------------
+# Test / coverage / Playwright
+# ---------------------------------------------------------------------------
+coverage/
+.nyc_output/
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+playwright/.cache/
+playwright/.auth/
+
+# Determinism harness output.
+# Golden state hashes ARE committed (they are the contract). The per-run
+# reports and captured artifacts are not.
+determinism-report/
+**/determinism-report/
+*.heapsnapshot
+*.trace.json
+*.trace.json.gz
+
+# ---------------------------------------------------------------------------
+# Generated assets.
+# Gemini art and Deepgram audio are produced at build time from committed
+# prompts/sources plus the provenance ledger. The generated binaries are not
+# committed; the inputs and the ledger are.
+# ---------------------------------------------------------------------------
+assets/generated/
+**/assets/generated/
+
+# ---------------------------------------------------------------------------
+# Editor / OS
+# ---------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
+*~
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+
+# ---------------------------------------------------------------------------
+# Kiro
+# ---------------------------------------------------------------------------
+# .kiro/specs and .kiro/steering are intentionally tracked.
+.kiro/cache/
+.kiro/logs/
+
+# ---------------------------------------------------------------------------
+# Research source material (workspace root .md/.docx/.pdf research documents)
+# is intentionally TRACKED for provenance. If that changes, add it here.
+# ---------------------------------------------------------------------------
+
+# Local scratch
+scratch/
+tmp/
+temp/
+*.local

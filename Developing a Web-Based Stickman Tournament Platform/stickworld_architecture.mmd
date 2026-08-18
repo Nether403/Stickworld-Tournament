@@ -1,0 +1,23 @@
+flowchart LR
+    Player[Player browser]
+    Host[React / Next.js platform shell]
+    Game[Phaser game module\nshared game contract]
+    CDN[CDN and static asset delivery]
+    API[Score and tournament API\nserver-side validation]
+    Auth[Authentication]
+    DB[(PostgreSQL\naccounts, attempts, bests, ranks)]
+    Store[Replay and asset storage]
+    Worker[Async verifier / moderation queue]
+    Obs[Error, performance, and audit telemetry]
+
+    Player --> Host
+    Host --> Game
+    Host --> CDN
+    Host --> Auth
+    Game -->|start attempt and submit result| API
+    API --> DB
+    API --> Store
+    API --> Worker
+    API --> Obs
+    Worker --> DB
+    DB -->|read-only leaderboard views| Host
