@@ -18,6 +18,7 @@ import {
   moderationActions,
   profiles,
   rankedInvites,
+  rankingDirty,
   rankingSnapshots,
   runs,
   scoreSubmissions,
@@ -1035,36 +1036,39 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
     ).not.toHaveLength(0);
   });
 
-  it('rejects finish as soon as its season starts closing', async () => {
-    const profile = await upsertProfile(db, `season-finish-${randomUUID()}`);
-    await claimHandle(db, c.clock, profile.userId, `q${randomUUID().slice(0, 8)}`);
-    const issueCtx = goldenEntropy();
-    const issued = await issueAttempt(db, issueCtx, {
-      userId: profile.userId,
-      gameSlug: 'test-chamber',
-      seedPolicy: 'fixed-course',
-      ip: '203.0.113.110',
-    });
-    const season = await db
-      .select()
-      .from(seasons)
-      .where(eq(seasons.slug, 'ci'))
-      .then((r) => r[0]);
-    await db.update(seasons).set({ status: 'closing' }).where(eq(seasons.id, season!.id));
-    try {
-      await expect(
-        finishAttempt(db, issueCtx, {
-          userId: profile.userId,
-          attemptId: issued.attemptId,
-          token: issued.token,
-          replayB64: (await replayForAttempt(issued.attemptId)).toString('base64'),
-          claimedScore: '302',
-        }),
-      ).rejects.toMatchObject({ code: 'SEASON_INACTIVE' });
-    } finally {
-      await db.update(seasons).set({ status: 'active' }).where(eq(seasons.id, season!.id));
-    }
-  });
+  it.each(['closing', 'closed'] as const)(
+    'rejects finish when its season is %s',
+    async (seasonStatus) => {
+      const profile = await upsertProfile(db, `season-finish-${randomUUID()}`);
+      await claimHandle(db, c.clock, profile.userId, `q${randomUUID().slice(0, 8)}`);
+      const issueCtx = goldenEntropy();
+      const issued = await issueAttempt(db, issueCtx, {
+        userId: profile.userId,
+        gameSlug: 'test-chamber',
+        seedPolicy: 'fixed-course',
+        ip: '203.0.113.110',
+      });
+      const season = await db
+        .select()
+        .from(seasons)
+        .where(eq(seasons.slug, 'ci'))
+        .then((r) => r[0]);
+      await db.update(seasons).set({ status: seasonStatus }).where(eq(seasons.id, season!.id));
+      try {
+        await expect(
+          finishAttempt(db, issueCtx, {
+            userId: profile.userId,
+            attemptId: issued.attemptId,
+            token: issued.token,
+            replayB64: (await replayForAttempt(issued.attemptId)).toString('base64'),
+            claimedScore: '302',
+          }),
+        ).rejects.toMatchObject({ code: 'SEASON_INACTIVE' });
+      } finally {
+        await db.update(seasons).set({ status: 'active' }).where(eq(seasons.id, season!.id));
+      }
+    },
+  );
 
   it('files hashed guest reports and records every moderator action and notice', async () => {
     const now = new Date('2026-08-18T23:00:00.000Z');
@@ -1149,6 +1153,44 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
     expect(
       await db.select().from(auditEvents).where(eq(auditEvents.actor, moderator.userId)),
     ).toEqual(expect.arrayContaining([expect.objectContaining({ action: 'moderation.suspend' })]));
+  });
+
+  it('allows only one moderator to action an open report', async () => {
+    const now = new Date('2026-08-18T23:30:00.000Z');
+    const target = await upsertProfile(db, `concurrent-report-target-${randomUUID()}`);
+    const moderator = await upsertProfile(db, `concurrent-moderator-${randomUUID()}`);
+    await db
+      .update(profiles)
+      .set({ role: 'moderator' })
+      .where(eq(profiles.userId, moderator.userId));
+    const report = await fileReport(db, ctx({ clock: { now: () => now } }), {
+      ip: '198.51.100.201',
+      targetUserId: target.userId,
+      reasonCode: 'other',
+      details: 'concurrent action',
+    });
+    const actionInput = {
+      actorUserId: moderator.userId,
+      reportId: report.id,
+      action: 'suspend' as const,
+      reasonCode: 'concurrent',
+      reasonText: 'Only one action is allowed',
+    };
+
+    const results = await Promise.allSettled([
+      moderateReport(db, { now: () => now }, actionInput),
+      moderateReport(db, { now: () => now }, actionInput),
+    ]);
+
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((result) => result.status === 'rejected')).toEqual([
+      expect.objectContaining({
+        reason: expect.objectContaining({ code: 'ATTEMPT_NOT_FOUND' }),
+      }),
+    ]);
+    expect(
+      await db.select().from(moderationActions).where(eq(moderationActions.reportId, report.id)),
+    ).toHaveLength(1);
   });
 
   it('rate-limits reports by hashed IP without sharing another IP bucket', async () => {
@@ -1236,9 +1278,71 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
     await recomputeSeason(db, c.clock, season!.id, { force: true });
     const board = await readLeaderboard(db, season!.id, sg!.id, { viewerUserId: profile.userId });
     expect(board.viewer?.handle).toBe('retired');
+    const standings = await readStandings(db, season!.id);
+    expect(standings.rows.find((row) => row.userId === profile.userId)?.handle).toBe('retired');
     const replacement = await upsertProfile(db, authUserId, `new-${email}`);
     expect(replacement.userId).not.toBe(profile.userId);
     expect(replacement.handle).toBeNull();
+  });
+
+  it('rolls back profile and dirty state when anonymisation audit fails', async () => {
+    const { season, sg } = await createIsolatedSeason(
+      db,
+      `privacy-atomic-${randomUUID().slice(0, 8)}`,
+    );
+    const authUserId = `privacy-atomic-${randomUUID()}`;
+    const profile = await upsertProfile(db, authUserId, `${authUserId}@example.com`);
+    const handle = `a${randomUUID().slice(0, 8)}`;
+    await claimHandle(db, c.clock, profile.userId, handle);
+    await insertVerifiedBest(db, profile.userId, sg.id, 100n);
+    const suffix = randomUUID().replaceAll('-', '');
+    const functionName = `fail_anonymise_audit_${suffix}`;
+    const triggerName = `fail_anonymise_audit_trigger_${suffix}`;
+    await pool.query(`
+      CREATE FUNCTION ${functionName}() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN
+        RAISE EXCEPTION 'forced anonymisation audit failure';
+      END
+      $$;
+      CREATE TRIGGER ${triggerName}
+      BEFORE INSERT ON audit_events
+      FOR EACH ROW
+      WHEN (NEW.action = 'profile.anonymise' AND NEW.target = '${profile.userId}')
+      EXECUTE FUNCTION ${functionName}();
+    `);
+
+    try {
+      await expect(anonymiseProfile(db, c.clock, profile.userId)).rejects.toThrow(
+        'forced anonymisation audit failure',
+      );
+      const after = await db
+        .select()
+        .from(profiles)
+        .where(eq(profiles.userId, profile.userId))
+        .then((rows) => rows[0]);
+      expect(after).toMatchObject({
+        status: 'active',
+        handle,
+        authUserId,
+      });
+      expect(
+        await db.select().from(rankingDirty).where(eq(rankingDirty.seasonId, season.id)),
+      ).toHaveLength(0);
+      expect(
+        await db
+          .select()
+          .from(auditEvents)
+          .where(
+            and(
+              eq(auditEvents.action, 'profile.anonymise'),
+              eq(auditEvents.target, profile.userId),
+            ),
+          ),
+      ).toHaveLength(0);
+    } finally {
+      await pool.query(`DROP TRIGGER IF EXISTS ${triggerName} ON audit_events`);
+      await pool.query(`DROP FUNCTION IF EXISTS ${functionName}()`);
+    }
   });
 });
 
