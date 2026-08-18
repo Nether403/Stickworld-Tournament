@@ -703,6 +703,9 @@ importers:
 
   packages/game-test-chamber:
     dependencies:
+      '@stickworld/input':
+        specifier: workspace:*
+        version: link:../input
       '@stickworld/replay':
         specifier: workspace:*
         version: link:../replay
@@ -829,6 +832,9 @@ importers:
 
   packages/replay:
     dependencies:
+      '@stickworld/input':
+        specifier: workspace:*
+        version: link:../input
       '@stickworld/sim-core':
         specifier: workspace:*
         version: link:../sim-core

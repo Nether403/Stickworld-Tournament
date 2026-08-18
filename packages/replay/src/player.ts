@@ -1,3 +1,4 @@
+import { ReplayInputSource } from '@stickworld/input';
 import type { ActionDescriptor, Simulation } from '@stickworld/sim-core';
 import { applyInputsInOrder } from '@stickworld/sim-core';
 import {
@@ -32,18 +33,15 @@ export function playReplay(
   actions: readonly ActionDescriptor[],
 ): PlayResult {
   const byId = new Map(actions.map((action) => [action.id, action]));
-  let eventIndex = 0;
+  const source = new ReplayInputSource(events);
   for (let tick = 0; tick < header.totalTicks; tick++) {
-    const batch: { actionId: number; value: number }[] = [];
-    while (eventIndex < events.length && events[eventIndex]!.tick === tick) {
-      const event = events[eventIndex]!;
-      const desc = byId.get(event.actionId);
-      if (!desc) throw new UnknownActionError(event.actionId);
-      assertValue(desc, event.value);
-      batch.push({ actionId: event.actionId, value: event.value });
-      eventIndex += 1;
+    const inputs = source.inputsForTick(tick);
+    for (const input of inputs) {
+      const desc = byId.get(input.actionId);
+      if (!desc) throw new UnknownActionError(input.actionId);
+      assertValue(desc, input.value);
     }
-    applyInputsInOrder((id, value) => simulation.applyInput(id, value), batch);
+    applyInputsInOrder((id, value) => simulation.applyInput(id, value), inputs);
     simulation.step();
   }
   if (simulation.tick !== header.totalTicks) throw new TickCountMismatchError();

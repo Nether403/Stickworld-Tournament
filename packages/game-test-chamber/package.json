@@ -21,6 +21,7 @@
     "score:browser": "pnpm score:bundle && playwright test --config playwright.config.ts"
   },
   "dependencies": {
+    "@stickworld/input": "workspace:*",
     "@stickworld/replay": "workspace:*",
     "@stickworld/sim-core": "workspace:*"
   },

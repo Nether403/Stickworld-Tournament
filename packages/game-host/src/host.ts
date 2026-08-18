@@ -13,7 +13,7 @@ import {
   type Simulation,
   type StickworldGame,
 } from '@stickworld/sim-core';
-import { shouldRecordChange } from '@stickworld/input';
+import { LocalInputSource, shouldRecordChange } from '@stickworld/input';
 import { emit } from '@stickworld/telemetry';
 import { bytesToBase64, hexPrefix, packGameVersionString, uuidToBytes } from './bytes.js';
 import { createRankedClient, type RankedClient } from './ranked-client.js';
@@ -52,6 +52,7 @@ export class GameHost {
   private stepper = new Stepper();
   private sim: Simulation | undefined;
   private recorder: Recorder | undefined;
+  private inputs: LocalInputSource | undefined;
   private session: RankedSession | undefined;
   private lastMs = 0;
   private countdownEndsAt = 0;
@@ -112,6 +113,7 @@ export class GameHost {
     const rapier = await this.initRapier();
     this.sim = this.game.createSimulation({ seed, rapier, prng: new Prng(seed) });
     this.recorder = new Recorder(this.game.manifest.actions);
+    this.inputs = new LocalInputSource();
     this.stepper = new Stepper();
     this.finishPosted = false;
     this.finishRunId = undefined;
@@ -132,16 +134,25 @@ export class GameHost {
 
   /** Drive the host with a wall-clock delta in milliseconds. Used by tests instead of rAF. */
   pump(dtMs: number): void {
-    if (this.disposed || !this.sim || !this.recorder) return;
+    if (this.disposed || !this.sim || !this.recorder || !this.inputs) return;
     const now = this.lastMs + dtMs;
     this.lastMs = now;
     this.tickClock(now, dtMs);
   }
 
   input(actionId: number, value: number): void {
-    if (this.phase !== 'playing' || this.pausedFlag || !this.sim || !this.recorder) return;
+    if (
+      this.phase !== 'playing' ||
+      this.pausedFlag ||
+      !this.sim ||
+      !this.recorder ||
+      !this.inputs
+    ) {
+      return;
+    }
     if (!shouldRecordChange(this.lastInput, actionId, value)) return;
-    this.recorder.record(this.sim.tick, actionId, value);
+    const event = this.recorder.record(this.sim.tick, actionId, value);
+    this.inputs.push(event.tick, event.actionId, event.value);
   }
 
   setPaused(paused: boolean): void {
@@ -161,6 +172,7 @@ export class GameHost {
     this.sim?.dispose();
     this.sim = undefined;
     this.recorder = undefined;
+    this.inputs = undefined;
     this.setPhase('idle');
   }
 
@@ -186,7 +198,7 @@ export class GameHost {
   }
 
   private tickClock(now: number, dtMs: number): void {
-    if (!this.sim || !this.recorder) return;
+    if (!this.sim || !this.recorder || !this.inputs) return;
     if (this.phase === 'countdown') {
       if (now >= this.countdownEndsAt) {
         this.setPhase('playing');
@@ -201,21 +213,13 @@ export class GameHost {
     }
     if (this.phase !== 'playing') return;
 
-    const events = this.recorder.snapshot();
-    let eventIndex = 0;
-    while (eventIndex < events.length && events[eventIndex]!.tick < this.sim.tick) {
-      eventIndex += 1;
-    }
     const consumed = this.stepper.advance(dtMs / 1000);
     for (let i = 0; i < consumed; i++) {
       const tick = this.sim.tick;
-      const batch: { actionId: number; value: number }[] = [];
-      while (eventIndex < events.length && events[eventIndex]!.tick === tick) {
-        const event = events[eventIndex]!;
-        batch.push({ actionId: event.actionId, value: event.value });
-        eventIndex += 1;
-      }
-      applyInputsInOrder((id, value) => this.sim!.applyInput(id, value), batch);
+      applyInputsInOrder(
+        (id, value) => this.sim!.applyInput(id, value),
+        this.inputs.inputsForTick(tick),
+      );
       this.sim.step();
     }
     this.emitFrame(this.stepper.interpolationAlpha);

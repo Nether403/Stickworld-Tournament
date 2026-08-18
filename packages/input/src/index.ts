@@ -26,3 +26,11 @@ export function nudgeAimDegrees(
   deg = ((deg % 360) + 360) % 360;
   return deg;
 }
+
+export {
+  LocalInputSource,
+  ReplayInputSource,
+  ScriptedInputSource,
+  type InputSource,
+  type QuantisedInput,
+} from './source.js';
