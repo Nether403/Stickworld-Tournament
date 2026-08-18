@@ -23,6 +23,26 @@ pnpm test
 
 `pnpm lint` and `pnpm typecheck` also run in CI.
 
+## Determinism
+
+```bash
+pnpm determinism:node
+pnpm determinism:browser
+```
+
+The fork decision lives in [`docs/adr/0001-determinism-fork.md`](docs/adr/0001-determinism-fork.md).
+**Branch A:** Node and the Playwright browsers agree bit-for-bit on `stress-01`.
+
+## Replay
+
+```bash
+pnpm build
+pnpm replay:verify packages/game-test-chamber/fixtures/sample.swr
+```
+
+Test Chamber (the permanent contract game) is `@stickworld/game-test-chamber`.
+Its reusable checks live at `@stickworld/game-test-chamber/contract-suite`.
+
 ## Secrets
 
 Never commit anything under `Credentials/`, any `.env` file, or a GCP service

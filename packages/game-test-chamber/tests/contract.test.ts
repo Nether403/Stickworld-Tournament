@@ -1,0 +1,49 @@
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { describe, expect, it } from 'vitest';
+import { testChamberGame } from '../src/index.js';
+import {
+  assertBudgetViolationDetected,
+  assertRenderStateIsolated,
+  assertReplayRoundTrip,
+  assertSameSeedSameScore,
+} from '../src/contract-suite.js';
+
+const here = dirname(fileURLToPath(import.meta.url));
+const goldenPath = join(here, '../conformance/golden/sample.json');
+const fixturePath = join(here, '../fixtures/sample.swr');
+
+describe('Test Chamber contract', () => {
+  it('scores the same in two Node runs from the same seed and inputs', async () => {
+    const result = await assertSameSeedSameScore(testChamberGame);
+    expect(result.score).toBeGreaterThan(0);
+  });
+
+  it('round-trips through a replay and keeps the demo fixture in sync', async () => {
+    const { score, hash, bytes } = await assertReplayRoundTrip(testChamberGame);
+    expect(score).toBeGreaterThan(0);
+    expect(hash).toMatch(/^[0-9a-f]{16}$/);
+    mkdirSync(dirname(goldenPath), { recursive: true });
+    mkdirSync(dirname(fixturePath), { recursive: true });
+    if (!existsSync(goldenPath) || process.env.WRITE_SAMPLE === '1') {
+      writeFileSync(
+        goldenPath,
+        `${JSON.stringify({ score, hash, ticks: 120, seed: [5, 6, 7, 8] }, null, 2)}\n`,
+      );
+      writeFileSync(fixturePath, bytes);
+    }
+    const golden = JSON.parse(readFileSync(goldenPath, 'utf8')) as { score: number; hash: string };
+    expect(score).toBe(golden.score);
+    expect(hash).toBe(golden.hash);
+    expect(readFileSync(fixturePath).byteLength).toBe(bytes.byteLength);
+  });
+
+  it('catches an over-budget simulation', async () => {
+    await assertBudgetViolationDetected(testChamberGame);
+  });
+
+  it('renderState mutation cannot affect the hash', async () => {
+    await assertRenderStateIsolated(testChamberGame);
+  });
+});

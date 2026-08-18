@@ -27,6 +27,12 @@ now risks writing it twice.
 
 The user has explicitly asked to revisit this spec after Spec 1 lands.
 
+**Spec 1 outcome (2026-08-18):** Branch A. One pinned Rapier `-compat` 0.20.0
+build is bit-identical in Node, Chromium, Firefox, and WebKit. Recorded in
+`docs/adr/0001-determinism-fork.md`. This spec can deepen as written; the
+verification worker stays Node. No fork revision of Specs 2–5 is required on
+the determinism axis.
+
 ---
 
 ## Requirements
