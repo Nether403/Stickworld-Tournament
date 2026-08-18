@@ -148,8 +148,8 @@ Tracked here so nothing falls between specs:
 - **No prizes at launch**, which keeps gambling, KYC, and tax questions out of scope. If that ever
   changes, it changes the schema and the verification rigour, and it needs re-planning rather than
   retrofitting.
-- **Age policy.** Decide before launch whether under-13 users are permitted, since that pulls in
-  COPPA obligations around data retention and information security. Currently undecided.
+- **Age policy.** 13+ self-declared. Locked in ADR-0007. No COPPA parental-consent
+  flow. No under-13 accounts by policy.
 
 ---
 
@@ -160,7 +160,7 @@ Tracked here so nothing falls between specs:
 | Trademark searches, platform name | — | not started |
 | Trademark searches, ten titles | — | not started |
 | Domain and social handle availability | — | not started |
-| Inspiration ledger, games 1–2 | — | not started, needed before Spec 3 |
-| CI grep gate | — | not started, implement in Spec 1 Task 1 |
+| Inspiration ledger, games 1–10 | — | present under `docs/legal/inspiration/` |
+| CI grep gate | — | running (`scripts/check-forbidden-names.mjs`) |
 | Counsel review, branding and silhouettes | — | not started, before public launch |
-| Age policy decision | — | undecided |
+| Age policy decision | — | **13+** (ADR-0007) |

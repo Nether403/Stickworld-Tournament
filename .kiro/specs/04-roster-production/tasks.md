@@ -1,7 +1,7 @@
 # Spec 4 — Tasks
 
-**Status:** approved 2026-08-18; executed. Spec 3 is merged (PR #3).
-Do not start Spec 5 until this PR merges and Spec 5 is separately approved.
+**Status:** executed; merged (PR #4). Spec 3 is merged (PR #3).
+Spec 5 waits for its own approval (ADR-0007).
 
 Legend: `[ ]` not started · `[~]` in progress · `[x]` done
 Geometry and score numbers: `docs/games/*.md` win if this file and those disagree.
@@ -128,4 +128,4 @@ All of `requirements.md` Definition of done, with executed-command evidence:
 - [x] `pnpm build` + `node scripts/check-play-bundle.mjs` — gzip 572160 ≤ 683301
 - [x] `CI=true pnpm --filter @stickworld/web e2e` — 36 passed (catalogue through Demolition, lazy-load, ranked 401)
 
-**Then stop.** Spec 5 waits for approval after this spec's execution evidence.
+**Then stop.** Spec 5 is a separate approval after this spec's merge.

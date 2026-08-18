@@ -21,12 +21,16 @@ Decisions: [`docs/adr/0005-spec3-game-host-and-auth.md`](docs/adr/0005-spec3-gam
 Frozen v1 game contracts: [`docs/games/hookline-sprint.md`](docs/games/hookline-sprint.md),
 [`docs/games/pickaxe-ascent.md`](docs/games/pickaxe-ascent.md).
 
-## Spec 4 (approved 2026-08-18; executing)
+## Spec 4 (merged)
 
-Roster games 3–10. Decisions locked in ADR-0006. Do not start Spec 5 until
-this spec’s exit criteria have executed-command evidence.
+Roster games 3–10. Decisions: [`docs/adr/0006-spec4-roster-contracts.md`](docs/adr/0006-spec4-roster-contracts.md).
 [`.kiro/specs/04-roster-production/`](.kiro/specs/04-roster-production/).
-Decisions: [`docs/adr/0006-spec4-roster-contracts.md`](docs/adr/0006-spec4-roster-contracts.md).
+
+## Spec 5 (waiting for approval)
+
+Assets, integrity, operations, launch. Do not execute until ADR-0007 is accepted.
+[`.kiro/specs/05-assets-integrity-operations-launch/`](.kiro/specs/05-assets-integrity-operations-launch/).
+Decisions: [`docs/adr/0007-spec5-launch-contracts.md`](docs/adr/0007-spec5-launch-contracts.md).
 
 ## Setup
 
