@@ -106,18 +106,18 @@ notice. Export then delete; board shows `retired`.
 **Objective:** CI matrix + budget file. Real phones are demo gates. Plan
 ref 22.
 
-- [ ] 4.1 Playwright projects: chromium, firefox, webkit, mobile-webkit
+- [x] 4.1 Playwright projects: chromium, firefox, webkit, mobile-webkit
       (iPhone 12), mobile-chromium (Pixel 5). CI installs those browsers.
       Catalogue + one practice play test run on each. _(R4.1)_
-- [ ] 4.2 Lazy-load: visit every `/play/<slug>`, assert the other nine
+- [x] 4.2 Lazy-load: visit every `/play/<slug>`, assert the other nine
       client package URL fragments are absent. _(R4.3)_
-- [ ] 4.3 Keep `score:browser` for all ten games (already in CI). Record
+- [x] 4.3 Keep `score:browser` for all ten games (already in CI). Record
       Hookline + Test Chamber verify duration `< 5 s` in a worker/platform
       test. _(R4.2, design §6)_
-- [ ] 4.4 `docs/budgets/spec5-qa.md` table (bundle ceiling, replay caps,
+- [x] 4.4 `docs/budgets/spec5-qa.md` table (bundle ceiling, replay caps,
       CI verify duration). Real-device rows left `pending` until demo.
       _(R4.4, R4.5)_
-- [ ] 4.5 `docs/ops/device-qa.md` checklist. Do not claim phones passed
+- [x] 4.5 `docs/ops/device-qa.md` checklist. Do not claim phones passed
       without a capture. _(R4.4)_
 
 **Demo:** CI table in the Actions log; later, device video on Task 6.
