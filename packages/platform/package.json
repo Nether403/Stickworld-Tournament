@@ -25,6 +25,7 @@
     "@stickworld/game-pickaxe-ascent": "workspace:*",
     "@stickworld/game-launch-lab": "workspace:*",
     "@stickworld/game-ragdoll-archery-rush": "workspace:*",
+    "@stickworld/game-hammer-throw-havoc": "workspace:*",
     "@stickworld/replay": "workspace:*",
     "@stickworld/sim-core": "workspace:*",
     "drizzle-orm": "0.45.2",

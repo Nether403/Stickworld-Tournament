@@ -100,5 +100,8 @@ maxScoreEvents: 256
 
 ## Kit finding log
 
-If the torque/release helper is unused by Launch and Archery, keep it in this
-package and log that — do not extract speculation.
+- `applySpinTorque` stays in this package. Launch Lab and Ragdoll Archery Rush do not need an angular helper, so it is not extracted into `physics-kit`.
+- The published cuboid overlaps the planted thrower; v1 sets thrower/hammer collision and solver groups so they interact with the world but not each other.
+- Revolute anchors at the thrower rest (`0.55` m) and the hammer handle (`-hx`) so spin is about the thrower, not the cuboid COM (COM pin produced `ω` with zero linear velocity on release).
+- `+0.35` N·m/tick cannot lift the 8 kg hammer over a vertical circle against gravity. While the joint exists the hammer uses `gravityScale = 0`; gravity returns on release. No new bodies.
+- Sample freeze: score **100**, hash **`b31b725255ab72d8`**, `SAMPLE_TICKS` 280. Spin from tick 0, release at tick 120.

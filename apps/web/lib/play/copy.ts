@@ -13,3 +13,7 @@ Rings use both colour and the same rectangular silhouette so colour is never the
 export const ARCHERY_INSTRUCTIONS = `Aim from the torso toward the pointer; drag distance sets draw. Press Space to fire. One arrow at a time; it returns to the string after it sleeps or leaves the course. Practice can pause; ranked cannot.
 
 Targets use both colour and size so colour is never the only cue.`;
+
+export const HAMMER_INSTRUCTIONS = `Hold D or Right to spin the hammer. Press Space to release. Touch: hold to spin, release the hold to throw. Three throws, all count. Practice can pause; ranked cannot.
+
+Gates use both colour and order so colour is never the only cue.`;

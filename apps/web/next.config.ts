@@ -16,6 +16,7 @@ const nextConfig: NextConfig = {
     '@stickworld/game-pickaxe-ascent',
     '@stickworld/game-launch-lab',
     '@stickworld/game-ragdoll-archery-rush',
+    '@stickworld/game-hammer-throw-havoc',
     'phaser',
   ],
   serverExternalPackages: ['pg', 'drizzle-orm'],

@@ -17,6 +17,7 @@
     "@stickworld/game-pickaxe-ascent": "workspace:*",
     "@stickworld/game-launch-lab": "workspace:*",
     "@stickworld/game-ragdoll-archery-rush": "workspace:*",
+    "@stickworld/game-hammer-throw-havoc": "workspace:*",
     "drizzle-orm": "0.45.2"
   },
   "devDependencies": {

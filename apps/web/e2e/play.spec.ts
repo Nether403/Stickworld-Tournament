@@ -1,11 +1,12 @@
 import { expect, test } from '@playwright/test';
 
-test('catalogue lists Hookline, Pickaxe, Launch Lab, and Archery live, not Test Chamber', async ({ page }) => {
+test('catalogue lists Hookline, Pickaxe, Launch Lab, Archery, and Hammer live, not Test Chamber', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Hookline Sprint' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Pickaxe Ascent' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Launch Lab' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Ragdoll Archery Rush' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Hammer Throw Havoc' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Practice' }).first()).toBeVisible();
   await expect(page.getByText('Test Chamber')).toHaveCount(0);
 });
@@ -84,4 +85,23 @@ test('Archery practice does not fetch Launch Lab client', async ({ page }) => {
   await expect(page.getByTestId('archery-stage')).toBeVisible();
   await expect(page.getByTestId('countdown')).toBeVisible({ timeout: 60_000 });
   expect(requested.some((url) => /launch-lab/i.test(url))).toBe(false);
+});
+
+test('ranked Hammer issue without a session is 401', async ({ request }) => {
+  const res = await request.post('/v1/games/hammer-throw-havoc/attempts', {
+    data: { seedPolicy: 'fixed-course' },
+  });
+  expect(res.status()).toBe(401);
+});
+
+test('Hammer practice does not fetch Archery client', async ({ page }) => {
+  const requested: string[] = [];
+  page.on('request', (req) => {
+    requested.push(req.url());
+  });
+  await page.goto('/play/hammer-throw-havoc');
+  await expect(page.getByTestId('instructions')).toContainText('Hold D or Right to spin');
+  await expect(page.getByTestId('hammer-stage')).toBeVisible();
+  await expect(page.getByTestId('countdown')).toBeVisible({ timeout: 60_000 });
+  expect(requested.some((url) => /ragdoll-archery/i.test(url))).toBe(false);
 });

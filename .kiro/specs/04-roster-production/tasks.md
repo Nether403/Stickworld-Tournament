@@ -32,11 +32,11 @@ on Archery; best-of is one replay. No GameHost / `/v1` / schema edits.
       Then extract the proved ragdoll into `physics-kit`. Archery hashes
       **byte-identical**. Do not add `@stickworld/ragdoll` unless Hammer also
       imports it (it should not). _(R1.6)_
-- [ ] 1.7 `games/hammer-throw-havoc` simulation + goldens + client + seed
+- [x] 1.7 `games/hammer-throw-havoc` simulation + goldens + client + seed
       `registry_id = 5`. Angular spin then release. Three throws, sum, tiny
       replay. Angular helper enters the kit only if Launch or Archery also
       needs it; otherwise keep it in Hammer and log the finding. _(R1.1)_
-- [ ] 1.8 Catalogue cards for all three. Championship can show five columns
+- [x] 1.8 Catalogue cards for all three. Championship can show five columns
       once verified results exist (platform already supports N games).
       Integration-effort notes in each game doc. _(R5, R6)_
 

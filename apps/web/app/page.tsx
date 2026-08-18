@@ -103,6 +103,24 @@ export default async function HomePage(): Promise<ReactNode> {
             )}
           </p>
         </article>
+        <article>
+          <h2>Hammer Throw Havoc</h2>
+          <p>Spin up and release three counted throws through gates.</p>
+          <p>
+            <Link href="/play/hammer-throw-havoc">Practice</Link>
+            {signedIn ? (
+              <>
+                {' '}
+                <Link href="/play/hammer-throw-havoc?mode=ranked">Ranked</Link>
+              </>
+            ) : (
+              <>
+                {' '}
+                <Link href="/auth/sign-in">Sign in to play ranked</Link>
+              </>
+            )}
+          </p>
+        </article>
       </section>
     </main>
   );

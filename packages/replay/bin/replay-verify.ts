@@ -55,6 +55,15 @@ async function loadGame(registryId: number): Promise<StickworldGame | undefined>
       return undefined;
     }
   }
+  if (registryId === 5) {
+    const url = new URL('../../../../games/hammer-throw-havoc/dist/index.js', import.meta.url);
+    try {
+      const mod = (await import(url.href)) as { hammerThrowHavocGame: StickworldGame };
+      return mod.hammerThrowHavocGame;
+    } catch {
+      return undefined;
+    }
+  }
   return undefined;
 }
 
