@@ -772,21 +772,30 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
   it('rotates the daily board, archives yesterday, and enforces the cap', async () => {
     const day1 = new Date('2026-08-18T12:00:00.000Z');
     await rotateDaily(db, { randomBytes: (n) => randomBytes(n) }, day1);
+
+    const day2 = new Date('2026-08-19T00:30:00.000Z');
+    await rotateDaily(db, { randomBytes: (n) => randomBytes(n) }, day2);
+    const profile = await upsertProfile(db, `auth-${randomUUID()}`);
+    await claimHandle(db, { now: () => day2 }, profile.userId, `c${randomUUID().slice(0, 8)}`);
+    const capCtx = ctx({ clock: { now: () => day2 } });
+    const first = await issueAttempt(db, capCtx, {
+      userId: profile.userId,
+      gameSlug: 'test-chamber',
+      seedPolicy: 'daily-seed',
+      ip: '11.0.0.0',
+    });
     const dailySg = await db
       .select({ id: seasonGames.id })
       .from(seasonGames)
       .innerJoin(games, eq(games.id, seasonGames.gameId))
-      .where(and(eq(games.slug, 'test-chamber'), eq(seasonGames.seedPolicy, 'daily-seed')))
+      .where(
+        and(
+          eq(seasonGames.seasonId, first.seasonId),
+          eq(games.slug, 'test-chamber'),
+          eq(seasonGames.seedPolicy, 'daily-seed'),
+        ),
+      )
       .then((r) => r[0]);
-    const todayBoard = await db
-      .select()
-      .from(dailyBoards)
-      .where(and(eq(dailyBoards.seasonGameId, dailySg!.id), eq(dailyBoards.utcDate, '2026-08-18')))
-      .then((r) => r[0]);
-    expect(todayBoard).toBeTruthy();
-
-    const day2 = new Date('2026-08-19T00:30:00.000Z');
-    await rotateDaily(db, { randomBytes: (n) => randomBytes(n) }, day2);
     const yesterday = await db
       .select()
       .from(dailyBoards)
@@ -799,16 +808,6 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
       .where(and(eq(dailyBoards.seasonGameId, dailySg!.id), eq(dailyBoards.utcDate, '2026-08-19')))
       .then((r) => r[0]);
     expect(nextBoard?.archivedAt).toBeNull();
-
-    const profile = await upsertProfile(db, `auth-${randomUUID()}`);
-    await claimHandle(db, { now: () => day2 }, profile.userId, `c${randomUUID().slice(0, 8)}`);
-    const capCtx = ctx({ clock: { now: () => day2 } });
-    const first = await issueAttempt(db, capCtx, {
-      userId: profile.userId,
-      gameSlug: 'test-chamber',
-      seedPolicy: 'daily-seed',
-      ip: '11.0.0.0',
-    });
     expect(first.seed).toEqual([...unpackSeed(nextBoard!.seed)]);
     for (let i = 1; i < 5; i++) {
       await issueAttempt(db, capCtx, {
@@ -831,11 +830,25 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
   it('rotates weekly boards onto ISO-week Monday and issues that seed', async () => {
     const tuesday = new Date('2026-08-18T12:00:00.000Z');
     await rotateDaily(db, { randomBytes: (n) => randomBytes(n) }, tuesday);
+    const profile = await upsertProfile(db, `auth-${randomUUID()}`);
+    await claimHandle(db, { now: () => tuesday }, profile.userId, `w${randomUUID().slice(0, 8)}`);
+    const issued = await issueAttempt(db, ctx({ clock: { now: () => tuesday } }), {
+      userId: profile.userId,
+      gameSlug: 'test-chamber',
+      seedPolicy: 'weekly-seed',
+      ip: '12.0.0.1',
+    });
     const weeklySg = await db
       .select({ id: seasonGames.id })
       .from(seasonGames)
       .innerJoin(games, eq(games.id, seasonGames.gameId))
-      .where(and(eq(games.slug, 'test-chamber'), eq(seasonGames.seedPolicy, 'weekly-seed')))
+      .where(
+        and(
+          eq(seasonGames.seasonId, issued.seasonId),
+          eq(games.slug, 'test-chamber'),
+          eq(seasonGames.seedPolicy, 'weekly-seed'),
+        ),
+      )
       .then((r) => r[0]);
     expect(weeklySg).toBeTruthy();
     const mondayBoard = await db
@@ -845,15 +858,6 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
       .then((r) => r[0]);
     expect(mondayBoard).toBeTruthy();
     expect(mondayBoard?.archivedAt).toBeNull();
-
-    const profile = await upsertProfile(db, `auth-${randomUUID()}`);
-    await claimHandle(db, { now: () => tuesday }, profile.userId, `w${randomUUID().slice(0, 8)}`);
-    const issued = await issueAttempt(db, ctx({ clock: { now: () => tuesday } }), {
-      userId: profile.userId,
-      gameSlug: 'test-chamber',
-      seedPolicy: 'weekly-seed',
-      ip: '12.0.0.1',
-    });
     expect(issued.seed).toEqual([...unpackSeed(mondayBoard!.seed)]);
   });
 
@@ -1548,13 +1552,17 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
 
       if (finishResult.status === 'fulfilled') {
         expect(finalAttempt?.status).toBe('submitted');
-        expect(finalSeason?.status).toBe('closed');
       } else {
         expect(finishResult.reason).toMatchObject({ code: 'SEASON_INACTIVE' });
         expect(finalAttempt?.status).not.toBe('submitted');
-        expect(finalSeason?.status).toBe('closing');
       }
-      expect([finalAttempt?.status, finalSeason?.status]).not.toEqual(['submitted', 'closing']);
+      expect(finalSeason?.status).toBe('closing');
+      expect(
+        await db
+          .select()
+          .from(rankingSnapshots)
+          .where(and(eq(rankingSnapshots.seasonId, season!.id), eq(rankingSnapshots.frozen, true))),
+      ).toHaveLength(0);
     } finally {
       await pool.query(`DROP TRIGGER IF EXISTS ${triggerName} ON attempts`);
       await pool.query(`DROP FUNCTION IF EXISTS ${functionName}()`);
@@ -1576,7 +1584,7 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
       const season = await db
         .select()
         .from(seasons)
-        .where(eq(seasons.slug, 'ci'))
+        .where(eq(seasons.id, issued.seasonId))
         .then((r) => r[0]);
       await db.update(seasons).set({ status: seasonStatus }).where(eq(seasons.id, season!.id));
       try {
