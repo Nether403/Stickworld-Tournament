@@ -1,5 +1,6 @@
 import { finishAttempt, requireRankedUser } from '@stickworld/platform';
 import { authIdentity, getDb, jsonError, platformContext } from '@/lib/server';
+import { emitRequestTelemetry } from '@/lib/request-telemetry';
 
 export async function POST(
   req: Request,
@@ -17,6 +18,12 @@ export async function POST(
       token: body.token ?? '',
       replayB64: body.replay ?? '',
       claimedScore: body.claimedScore ?? '',
+    });
+    emitRequestTelemetry(req, 'attempt.finish', {
+      gameId: result.gameId,
+      gameVersion: result.gameVersion,
+      seasonId: result.seasonId,
+      mode: 'ranked',
     });
     return Response.json(result, { status: 202 });
   } catch (err) {

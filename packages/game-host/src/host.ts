@@ -1,8 +1,4 @@
-import {
-  encodeReplay,
-  Recorder,
-  type InputEvent,
-} from '@stickworld/replay';
+import { encodeReplay, Recorder, type InputEvent } from '@stickworld/replay';
 import {
   applyInputsInOrder,
   initRapier,
@@ -14,7 +10,7 @@ import {
   type StickworldGame,
 } from '@stickworld/sim-core';
 import { LocalInputSource, shouldRecordChange } from '@stickworld/input';
-import { emit } from '@stickworld/telemetry';
+import { classifyUserAgent, emit, type Tags } from '@stickworld/telemetry';
 import { bytesToBase64, hexPrefix, packGameVersionString, uuidToBytes } from './bytes.js';
 import { createRankedClient, type RankedClient } from './ranked-client.js';
 import type { GameView, HostPhase, PlayMode, RankedSession } from './types.js';
@@ -34,6 +30,7 @@ export interface GameHostConfig {
   initRapier?: typeof initRapier;
   practiceSeed?: Seed128;
   rankedClient?: RankedClient;
+  userAgent?: string;
 }
 
 export class GameHost {
@@ -49,6 +46,7 @@ export class GameHost {
   private readonly initRapier: typeof initRapier;
   private readonly practiceSeed: Seed128;
   private readonly ranked: RankedClient;
+  private readonly clientTags: Pick<Tags, 'browserFamily' | 'deviceClass'>;
   private stepper = new Stepper();
   private sim: Simulation | undefined;
   private recorder: Recorder | undefined;
@@ -83,8 +81,10 @@ export class GameHost {
       });
     this.initRapier = config.initRapier ?? initRapier;
     this.practiceSeed = config.practiceSeed ?? PRACTICE_SEED;
+    this.clientTags = classifyUserAgent(config.userAgent ?? globalThis.navigator?.userAgent);
     this.ranked =
-      config.rankedClient ?? createRankedClient(config.fetchImpl ?? globalThis.fetch.bind(globalThis));
+      config.rankedClient ??
+      createRankedClient(config.fetchImpl ?? globalThis.fetch.bind(globalThis));
   }
 
   get paused(): boolean {
@@ -127,7 +127,9 @@ export class GameHost {
     emit('host.start', {
       gameId: this.game.manifest.id,
       gameVersion: this.game.manifest.gameVersion,
+      seasonId: this.session?.seasonId,
       mode: this.mode,
+      ...this.clientTags,
     });
     this.queueFrame();
   }
@@ -247,7 +249,9 @@ export class GameHost {
     emit('host.finish', {
       gameId: this.game.manifest.id,
       gameVersion: this.game.manifest.gameVersion,
+      seasonId: this.session?.seasonId,
       mode: this.mode,
+      ...this.clientTags,
     });
     if (this.mode !== 'ranked' || !this.session || this.finishPosted) return;
     this.finishPosted = true;

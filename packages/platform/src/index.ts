@@ -37,6 +37,7 @@ export {
   closeSeason,
   readLeaderboard,
   readStandings,
+  rebuildSeasonForRestoreDrill,
   recomputeAllDirty,
   recomputeSeason,
 } from './recompute.js';

@@ -36,11 +36,19 @@ export interface FinishInput {
   claimedScore: string;
 }
 
+export interface FinishResult {
+  runId: string;
+  status: 'pending';
+  gameId: string;
+  gameVersion: string;
+  seasonId: string;
+}
+
 export async function finishAttempt(
   db: Database,
   ctx: PlatformContext,
   input: FinishInput,
-): Promise<{ runId: string; status: 'pending' }> {
+): Promise<FinishResult> {
   const now = ctx.clock.now();
   await hitRateLimit(
     db,
@@ -164,5 +172,11 @@ export async function finishAttempt(
     });
   });
   await audit(db, { actor: input.userId, action: 'attempt.finish', target: runId });
-  return { runId, status: 'pending' };
+  return {
+    runId,
+    status: 'pending',
+    gameId: sg.games.slug,
+    gameVersion: version.gameVersion,
+    seasonId: attemptWithSeason.seasons.id,
+  };
 }

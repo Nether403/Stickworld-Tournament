@@ -37,7 +37,9 @@ export interface IssueInput {
 export interface IssueResult {
   attemptId: string;
   seed: [number, number, number, number];
+  gameId: string;
   gameVersion: string;
+  seasonId: string;
   expiresAt: string;
   token: string;
   dailyCapRemaining: number;
@@ -212,7 +214,9 @@ export async function issueAttempt(
     return {
       attemptId,
       seed: [seed[0], seed[1], seed[2], seed[3]],
+      gameId: game.slug,
       gameVersion: version.gameVersion,
+      seasonId: sg.seasons.id,
       expiresAt: expiresAt.toISOString(),
       token,
       dailyCapRemaining: remaining - 1,

@@ -29,6 +29,7 @@ import {
   initRapier,
   type StickworldGame,
 } from '@stickworld/sim-core';
+import { emit, type Tags } from '@stickworld/telemetry';
 import { and, eq, sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { audit } from './audit.js';
@@ -103,6 +104,7 @@ async function reject(
   code: ReasonCode,
   firstTick: number | null,
   at: Date,
+  tags: Tags,
 ): Promise<void> {
   await db
     .update(scoreSubmissions)
@@ -118,6 +120,7 @@ async function reject(
     .set({ state: 'done', lastError: code })
     .where(eq(verificationJobs.id, job.jobId));
   await audit(db, { actor: null, action: 'verify.reject', target: job.runId, reason: code });
+  emit('verify.reject', { ...tags, reasonCode: code });
 }
 
 function headerMatches(
@@ -151,150 +154,206 @@ export async function processClaimedJob(
   job: ClaimedJob,
   options: { maxClaims?: number } = {},
 ): Promise<void> {
-  const maxClaims = options.maxClaims ?? WORKER_MAX_CLAIMS;
-  if (job.attempts > maxClaims) {
-    await db
-      .update(scoreSubmissions)
-      .set({
-        verificationStatus: 'rejected',
-        reasonCode: 'WORKER_FAULT',
-        verifiedAt: clock.now(),
-      })
-      .where(eq(scoreSubmissions.runId, job.runId));
-    await db
-      .update(verificationJobs)
-      .set({ state: 'failed', lastError: 'WORKER_FAULT' })
-      .where(eq(verificationJobs.id, job.jobId));
-    await audit(db, { actor: null, action: 'verify.fault', target: job.runId, reason: 'WORKER_FAULT' });
-    return;
-  }
+  const startedAt = performance.now();
+  let telemetryTags: Tags = {
+    gameId: 'unknown',
+    gameVersion: 'unknown',
+    mode: 'ranked',
+    browserFamily: 'unknown',
+    deviceClass: 'unknown',
+  };
+  let outcomeReasonCode: string | undefined;
+  const rejectClaim = async (
+    code: ReasonCode,
+    firstTick: number | null,
+    at: Date,
+  ): Promise<void> => {
+    outcomeReasonCode = code;
+    await reject(db, job, code, firstTick, at, telemetryTags);
+  };
 
-  const run = await db.select().from(runs).where(eq(runs.id, job.runId)).then((r) => r[0]);
-  const attempt = run
-    ? await db.select().from(attempts).where(eq(attempts.id, run.attemptId)).then((r) => r[0])
-    : undefined;
-  if (!run || !attempt) {
-    await reject(db, job, 'INTERNAL', null, clock.now());
-    return;
-  }
-  const version = await db
-    .select()
-    .from(gameVersions)
-    .where(eq(gameVersions.id, attempt.gameVersionId))
-    .then((r) => r[0]);
-  const sg = await db
-    .select()
-    .from(seasonGames)
-    .innerJoin(games, eq(games.id, seasonGames.gameId))
-    .where(eq(seasonGames.id, attempt.seasonGameId))
-    .then((r) => r[0]);
-  if (!version || !sg) {
-    await reject(db, job, 'WRONG_VERSION', null, clock.now());
-    return;
-  }
-  const game = GAMES.get(sg.games.registryId);
-  if (!game) {
-    await reject(db, job, 'WRONG_VERSION', null, clock.now());
-    return;
-  }
-
-  const decoded = await decodeReplay(run.replay);
-  if (!decoded.ok) {
-    await reject(db, job, decoded.error.code as ReasonCode, null, clock.now());
-    return;
-  }
-  const mismatch = headerMatches(
-    decoded.header,
-    sg.games.registryId,
-    version,
-    unpackSeed(attempt.seed),
-    attempt.id,
-  );
-  if (mismatch) {
-    await reject(db, job, mismatch, null, clock.now());
-    return;
-  }
-
-  const rapier = await initRapier();
-  const seed = unpackSeed(attempt.seed);
-  const sim = game.createSimulation({ seed, rapier, prng: new Prng(seed) });
   try {
-    const { playReplay } = await import('@stickworld/replay');
-    let result: { score: number; stateHash: bigint };
-    try {
-      result = playReplay(sim, decoded.header, decoded.events, game.manifest.actions);
-    } catch (err) {
-      const code =
-        err instanceof BudgetExceededError
-          ? 'BUDGET_EXCEEDED'
-          : err instanceof NonFiniteStateError
-            ? 'NON_FINITE_STATE'
-            : err && typeof err === 'object' && 'code' in err
-              ? ((err as { code: string }).code as ReasonCode)
-              : 'INTERNAL';
-      const tick =
-        code === 'SCORE_MISMATCH' || code === 'STATE_HASH_MISMATCH'
-          ? (sim.scoreEvents().at(-1)?.tick ?? 0)
-          : null;
-      await reject(db, job, code, tick, clock.now());
+    const maxClaims = options.maxClaims ?? WORKER_MAX_CLAIMS;
+    if (job.attempts > maxClaims) {
+      await db
+        .update(scoreSubmissions)
+        .set({
+          verificationStatus: 'rejected',
+          reasonCode: 'WORKER_FAULT',
+          verifiedAt: clock.now(),
+        })
+        .where(eq(scoreSubmissions.runId, job.runId));
+      await db
+        .update(verificationJobs)
+        .set({ state: 'failed', lastError: 'WORKER_FAULT' })
+        .where(eq(verificationJobs.id, job.jobId));
+      await audit(db, {
+        actor: null,
+        action: 'verify.fault',
+        target: job.runId,
+        reason: 'WORKER_FAULT',
+      });
+      outcomeReasonCode = 'WORKER_FAULT';
+      emit('verify.reject', { ...telemetryTags, reasonCode: outcomeReasonCode });
       return;
     }
-    if (BigInt(result.score) !== run.claimedScore) {
-      await reject(db, job, 'SCORE_MISMATCH', sim.scoreEvents().at(-1)?.tick ?? 0, clock.now());
-      return;
-    }
-    const now = clock.now();
-    const hashBytes = Buffer.alloc(8);
-    hashBytes.writeBigUInt64LE(result.stateHash);
-    await db
-      .update(scoreSubmissions)
-      .set({
-        verificationStatus: 'verified',
-        verifiedScore: BigInt(result.score),
-        verifiedHash: hashBytes,
-        verifiedAt: now,
-        reasonCode: null,
-      })
-      .where(eq(scoreSubmissions.runId, job.runId));
-    const resultId = randomUUID();
-    await db.insert(verifiedResults).values({
-      id: resultId,
-      userId: run.userId,
-      seasonGameId: attempt.seasonGameId,
-      runId: run.id,
-      score: BigInt(result.score),
-      achievedAt: now,
-    });
-    const existing = await db
+
+    const run = await db
       .select()
-      .from(gameBests)
-      .where(and(eq(gameBests.seasonGameId, attempt.seasonGameId), eq(gameBests.userId, run.userId)))
+      .from(runs)
+      .where(eq(runs.id, job.runId))
       .then((r) => r[0]);
-    if (!existing || existing.score < BigInt(result.score)) {
-      if (existing) {
-        await db
-          .update(gameBests)
-          .set({ verifiedResultId: resultId, score: BigInt(result.score) })
-          .where(
-            and(eq(gameBests.seasonGameId, attempt.seasonGameId), eq(gameBests.userId, run.userId)),
-          );
-      } else {
-        await db.insert(gameBests).values({
-          seasonGameId: attempt.seasonGameId,
-          userId: run.userId,
-          verifiedResultId: resultId,
-          score: BigInt(result.score),
-        });
-      }
+    const attempt = run
+      ? await db
+          .select()
+          .from(attempts)
+          .where(eq(attempts.id, run.attemptId))
+          .then((r) => r[0])
+      : undefined;
+    if (!run || !attempt) {
+      await rejectClaim('INTERNAL', null, clock.now());
+      return;
     }
-    await markSeasonDirty(db, sg.season_games.seasonId, now);
-    await db
-      .update(verificationJobs)
-      .set({ state: 'done', lastError: null })
-      .where(eq(verificationJobs.id, job.jobId));
-    await audit(db, { actor: null, action: 'verify.ok', target: job.runId });
+    const version = await db
+      .select()
+      .from(gameVersions)
+      .where(eq(gameVersions.id, attempt.gameVersionId))
+      .then((r) => r[0]);
+    const sg = await db
+      .select()
+      .from(seasonGames)
+      .innerJoin(games, eq(games.id, seasonGames.gameId))
+      .where(eq(seasonGames.id, attempt.seasonGameId))
+      .then((r) => r[0]);
+    if (!version || !sg) {
+      await rejectClaim('WRONG_VERSION', null, clock.now());
+      return;
+    }
+    telemetryTags = {
+      gameId: sg.games.slug,
+      gameVersion: version.gameVersion,
+      seasonId: sg.season_games.seasonId,
+      mode: 'ranked',
+      browserFamily: 'unknown',
+      deviceClass: 'unknown',
+    };
+    const game = GAMES.get(sg.games.registryId);
+    if (!game) {
+      await rejectClaim('WRONG_VERSION', null, clock.now());
+      return;
+    }
+
+    const decoded = await decodeReplay(run.replay);
+    if (!decoded.ok) {
+      await rejectClaim(decoded.error.code as ReasonCode, null, clock.now());
+      return;
+    }
+    const mismatch = headerMatches(
+      decoded.header,
+      sg.games.registryId,
+      version,
+      unpackSeed(attempt.seed),
+      attempt.id,
+    );
+    if (mismatch) {
+      await rejectClaim(mismatch, null, clock.now());
+      return;
+    }
+
+    const rapier = await initRapier();
+    const seed = unpackSeed(attempt.seed);
+    const sim = game.createSimulation({ seed, rapier, prng: new Prng(seed) });
+    try {
+      const { playReplay } = await import('@stickworld/replay');
+      let result: { score: number; stateHash: bigint };
+      try {
+        result = playReplay(sim, decoded.header, decoded.events, game.manifest.actions);
+      } catch (err) {
+        const code =
+          err instanceof BudgetExceededError
+            ? 'BUDGET_EXCEEDED'
+            : err instanceof NonFiniteStateError
+              ? 'NON_FINITE_STATE'
+              : err && typeof err === 'object' && 'code' in err
+                ? ((err as { code: string }).code as ReasonCode)
+                : 'INTERNAL';
+        const tick =
+          code === 'SCORE_MISMATCH' || code === 'STATE_HASH_MISMATCH'
+            ? (sim.scoreEvents().at(-1)?.tick ?? 0)
+            : null;
+        await rejectClaim(code, tick, clock.now());
+        return;
+      }
+      if (BigInt(result.score) !== run.claimedScore) {
+        await rejectClaim('SCORE_MISMATCH', sim.scoreEvents().at(-1)?.tick ?? 0, clock.now());
+        return;
+      }
+      const now = clock.now();
+      const hashBytes = Buffer.alloc(8);
+      hashBytes.writeBigUInt64LE(result.stateHash);
+      await db
+        .update(scoreSubmissions)
+        .set({
+          verificationStatus: 'verified',
+          verifiedScore: BigInt(result.score),
+          verifiedHash: hashBytes,
+          verifiedAt: now,
+          reasonCode: null,
+        })
+        .where(eq(scoreSubmissions.runId, job.runId));
+      const resultId = randomUUID();
+      await db.insert(verifiedResults).values({
+        id: resultId,
+        userId: run.userId,
+        seasonGameId: attempt.seasonGameId,
+        runId: run.id,
+        score: BigInt(result.score),
+        achievedAt: now,
+      });
+      const existing = await db
+        .select()
+        .from(gameBests)
+        .where(
+          and(eq(gameBests.seasonGameId, attempt.seasonGameId), eq(gameBests.userId, run.userId)),
+        )
+        .then((r) => r[0]);
+      if (!existing || existing.score < BigInt(result.score)) {
+        if (existing) {
+          await db
+            .update(gameBests)
+            .set({ verifiedResultId: resultId, score: BigInt(result.score) })
+            .where(
+              and(
+                eq(gameBests.seasonGameId, attempt.seasonGameId),
+                eq(gameBests.userId, run.userId),
+              ),
+            );
+        } else {
+          await db.insert(gameBests).values({
+            seasonGameId: attempt.seasonGameId,
+            userId: run.userId,
+            verifiedResultId: resultId,
+            score: BigInt(result.score),
+          });
+        }
+      }
+      await markSeasonDirty(db, sg.season_games.seasonId, now);
+      await db
+        .update(verificationJobs)
+        .set({ state: 'done', lastError: null })
+        .where(eq(verificationJobs.id, job.jobId));
+      await audit(db, { actor: null, action: 'verify.ok', target: job.runId });
+      outcomeReasonCode = 'OK';
+      emit('verify.ok', { ...telemetryTags, reasonCode: outcomeReasonCode });
+    } finally {
+      sim.dispose();
+    }
   } finally {
-    sim.dispose();
+    emit('verify.duration_ms', {
+      ...telemetryTags,
+      ...(outcomeReasonCode ? { reasonCode: outcomeReasonCode } : {}),
+      durationMs: Math.round((performance.now() - startedAt) * 1_000) / 1_000,
+    });
   }
 }
 
@@ -316,12 +375,19 @@ export async function processNextJob(
     const message = err instanceof Error ? err.message : 'unknown';
     await db
       .update(verificationJobs)
-      .set({ state: job.attempts >= (options.maxClaims ?? WORKER_MAX_CLAIMS) ? 'failed' : 'queued', lastError: message })
+      .set({
+        state: job.attempts >= (options.maxClaims ?? WORKER_MAX_CLAIMS) ? 'failed' : 'queued',
+        lastError: message,
+      })
       .where(eq(verificationJobs.id, job.jobId));
     if (job.attempts >= (options.maxClaims ?? WORKER_MAX_CLAIMS)) {
       await db
         .update(scoreSubmissions)
-        .set({ verificationStatus: 'rejected', reasonCode: 'WORKER_FAULT', verifiedAt: clock.now() })
+        .set({
+          verificationStatus: 'rejected',
+          reasonCode: 'WORKER_FAULT',
+          verifiedAt: clock.now(),
+        })
         .where(eq(scoreSubmissions.runId, job.runId));
     }
   }

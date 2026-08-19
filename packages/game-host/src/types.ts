@@ -19,6 +19,7 @@ export interface RankedSession {
   token: string;
   seed: readonly [number, number, number, number];
   gameVersion: string;
+  seasonId?: string;
   expiresAt: string;
 }
 

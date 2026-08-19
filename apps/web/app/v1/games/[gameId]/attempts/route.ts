@@ -1,5 +1,6 @@
 import { issueAttempt, requireRankedUser, ApiError } from '@stickworld/platform';
 import { authIdentity, clientIp, getDb, jsonError, platformContext } from '@/lib/server';
+import { emitRequestTelemetry } from '@/lib/request-telemetry';
 
 export async function POST(
   req: Request,
@@ -20,6 +21,12 @@ export async function POST(
       seedPolicy: body.seedPolicy ?? 'fixed-course',
       ip: clientIp(req),
       email: identity.email,
+    });
+    emitRequestTelemetry(req, 'attempt.issue', {
+      gameId: result.gameId,
+      gameVersion: result.gameVersion,
+      seasonId: result.seasonId,
+      mode: 'ranked',
     });
     return Response.json(result, { status: 201 });
   } catch (err) {

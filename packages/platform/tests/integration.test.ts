@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { gunzipSync, gzipSync } from 'node:zlib';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   applyMigrations,
   attempts,
@@ -37,7 +37,13 @@ import { claimHandle, upsertProfile } from '../src/profiles.js';
 import { issueAttempt } from '../src/attempts.js';
 import { finishAttempt } from '../src/finish.js';
 import { processClaimedJob, processNextJob } from '../src/verify.js';
-import { closeSeason, readLeaderboard, readStandings, recomputeSeason } from '../src/recompute.js';
+import {
+  closeSeason,
+  readLeaderboard,
+  readStandings,
+  rebuildSeasonForRestoreDrill,
+  recomputeSeason,
+} from '../src/recompute.js';
 import { rotateDaily } from '../src/daily.js';
 import { packSeed, unpackSeed, uuidToBytes } from '../src/seed128.js';
 import { floorWindow, hitRateLimit } from '../src/rate-limit.js';
@@ -82,6 +88,30 @@ async function replayForAttempt(attemptId: string): Promise<Buffer> {
   return Buffer.from(
     await encodeReplay({ ...decoded.header, attemptId: uuidToBytes(attemptId) }, decoded.events),
   );
+}
+
+async function captureTelemetry(run: () => Promise<void>): Promise<Array<Record<string, unknown>>> {
+  const previous = process.env.STICKWORLD_TELEMETRY;
+  process.env.STICKWORLD_TELEMETRY = '1';
+  const lines: string[] = [];
+  const write = vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+    lines.push(String(chunk));
+    return true;
+  });
+  try {
+    await run();
+  } finally {
+    write.mockRestore();
+    if (previous === undefined) delete process.env.STICKWORLD_TELEMETRY;
+    else process.env.STICKWORLD_TELEMETRY = previous;
+  }
+  return lines.map((line) => JSON.parse(line) as Record<string, unknown>);
+}
+
+function withoutAsOf(payload: unknown): unknown {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return payload;
+  const { asOf: _asOf, ...rest } = payload as Record<string, unknown>;
+  return rest;
 }
 
 describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
@@ -191,6 +221,11 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
       ip: '10.0.0.2',
     });
     expect(issued.seed).toEqual([5, 6, 7, 8]);
+    expect(issued).toMatchObject({
+      gameId: 'test-chamber',
+      gameVersion: '1.0.0',
+      seasonId: expect.any(String),
+    });
     const decoded = await decodeReplay(SAMPLE);
     expect(decoded.ok).toBe(true);
     if (!decoded.ok) return;
@@ -205,9 +240,36 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
       replayB64: Buffer.from(replay).toString('base64'),
       claimedScore: '302',
     });
-    expect(finished.status).toBe('pending');
-    const processed = await processNextJob(db, issueCtx.clock, 'worker-1', { staleLockSeconds: 0 });
+    expect(finished).toMatchObject({
+      status: 'pending',
+      gameId: 'test-chamber',
+      gameVersion: '1.0.0',
+      seasonId: issued.seasonId,
+    });
+    let processed = false;
+    const telemetry = await captureTelemetry(async () => {
+      processed = await processNextJob(db, issueCtx.clock, 'worker-1', { staleLockSeconds: 0 });
+    });
     expect(processed).toBe(true);
+    expect(telemetry).toEqual([
+      expect.objectContaining({
+        name: 'verify.ok',
+        gameId: 'test-chamber',
+        gameVersion: '1.0.0',
+        seasonId: issued.seasonId,
+        browserFamily: 'unknown',
+        deviceClass: 'unknown',
+        mode: 'ranked',
+        reasonCode: 'OK',
+      }),
+      expect.objectContaining({
+        name: 'verify.duration_ms',
+        gameId: 'test-chamber',
+        gameVersion: '1.0.0',
+        seasonId: issued.seasonId,
+        durationMs: expect.any(Number),
+      }),
+    ]);
     const sub = await db
       .select()
       .from(scoreSubmissions)
@@ -267,7 +329,20 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
       replayB64: Buffer.from(replay).toString('base64'),
       claimedScore: '999999999',
     });
-    await processNextJob(db, issueCtx.clock, 'worker-2', { staleLockSeconds: 0 });
+    const telemetry = await captureTelemetry(async () => {
+      await processNextJob(db, issueCtx.clock, 'worker-2', { staleLockSeconds: 0 });
+    });
+    expect(telemetry).toEqual([
+      expect.objectContaining({
+        name: 'verify.reject',
+        reasonCode: 'SCORE_MISMATCH',
+      }),
+      expect.objectContaining({
+        name: 'verify.duration_ms',
+        reasonCode: 'SCORE_MISMATCH',
+        durationMs: expect.any(Number),
+      }),
+    ]);
     const sub = await db
       .select()
       .from(scoreSubmissions)
@@ -598,6 +673,42 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
       frozenBytes,
     );
   }, 120_000);
+
+  it('rebuilds closed-season rankings beside frozen snapshots for a restore drill', async () => {
+    const { season, sg } = await createIsolatedSeason(db, `restore-${randomUUID().slice(0, 8)}`);
+    const profile = await upsertProfile(db, `restore-${randomUUID()}`);
+    await insertVerifiedBest(db, profile.userId, sg.id, 321n);
+    await recomputeSeason(db, c.clock, season.id, { force: true });
+    await closeSeason(db, c.clock, season.id);
+    const frozen = await db
+      .select()
+      .from(rankingSnapshots)
+      .where(and(eq(rankingSnapshots.seasonId, season.id), eq(rankingSnapshots.frozen, true)));
+    const frozenBytes = new Map(frozen.map((row) => [row.id, JSON.stringify(row.payload)]));
+
+    const rebuilt = await rebuildSeasonForRestoreDrill(
+      db,
+      { now: () => new Date(c.clock.now().getTime() + 1_000) },
+      season.id,
+    );
+
+    expect(rebuilt).toBe(true);
+    const allSnapshots = await db
+      .select()
+      .from(rankingSnapshots)
+      .where(eq(rankingSnapshots.seasonId, season.id));
+    for (const frozenSnapshot of frozen) {
+      const liveSnapshot = allSnapshots.find(
+        (row) =>
+          !row.frozen &&
+          row.scope === frozenSnapshot.scope &&
+          row.subjectId === frozenSnapshot.subjectId,
+      );
+      expect(liveSnapshot).toBeTruthy();
+      expect(withoutAsOf(liveSnapshot?.payload)).toEqual(withoutAsOf(frozenSnapshot.payload));
+      expect(JSON.stringify(frozenSnapshot.payload)).toBe(frozenBytes.get(frozenSnapshot.id));
+    }
+  });
 
   it('serves frozen rankings and overlays anonymised handles without changing snapshot bytes', async () => {
     const { season, sg } = await createIsolatedSeason(
@@ -1516,13 +1627,17 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
     await anonymiseProfile(db, { now: () => new Date(now.getTime() + 1) }, target.userId);
 
     await expect(
-      moderateReport(db, { now: () => new Date(now.getTime() + 2) }, {
-        actorUserId: moderator.userId,
-        reportId: report.id,
-        action: 'force_release_handle',
-        reasonCode: 'offensive',
-        reasonText: 'Release the reported handle',
-      }),
+      moderateReport(
+        db,
+        { now: () => new Date(now.getTime() + 2) },
+        {
+          actorUserId: moderator.userId,
+          reportId: report.id,
+          action: 'force_release_handle',
+          reasonCode: 'offensive',
+          reasonText: 'Release the reported handle',
+        },
+      ),
     ).resolves.toMatchObject({ status: 'actioned' });
 
     const targetAfter = await db
@@ -1574,13 +1689,17 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
       details: 'remove from live boards',
     });
 
-    await moderateReport(db, { now: () => releasedAt }, {
-      actorUserId: moderator.userId,
-      reportId: report.id,
-      action: 'force_release_handle',
-      reasonCode: 'offensive',
-      reasonText: 'Release the reported handle',
-    });
+    await moderateReport(
+      db,
+      { now: () => releasedAt },
+      {
+        actorUserId: moderator.userId,
+        reportId: report.id,
+        action: 'force_release_handle',
+        reasonCode: 'offensive',
+        reasonText: 'Release the reported handle',
+      },
+    );
 
     const dirty = await db
       .select()
@@ -1601,13 +1720,13 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
     const liveSnapshots = await db
       .select()
       .from(rankingSnapshots)
-      .where(
-        and(eq(rankingSnapshots.seasonId, season.id), eq(rankingSnapshots.frozen, false)),
-      );
-    const targetSnapshotRows = liveSnapshots.flatMap(
-      (snapshot) =>
-        (snapshot.payload as { rows: Array<{ userId: string; handle: string | null }> }).rows,
-    ).filter((row) => row.userId === target.userId);
+      .where(and(eq(rankingSnapshots.seasonId, season.id), eq(rankingSnapshots.frozen, false)));
+    const targetSnapshotRows = liveSnapshots
+      .flatMap(
+        (snapshot) =>
+          (snapshot.payload as { rows: Array<{ userId: string; handle: string | null }> }).rows,
+      )
+      .filter((row) => row.userId === target.userId);
     expect(targetSnapshotRows).toHaveLength(2);
     expect(targetSnapshotRows.every((row) => row.handle === null)).toBe(true);
   });
@@ -1643,13 +1762,17 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
       frozenBefore.map((snapshot) => [snapshot.id, JSON.stringify(snapshot.payload)]),
     );
 
-    await moderateReport(db, { now: () => new Date(frozenAt.getTime() + 1) }, {
-      actorUserId: moderator.userId,
-      reportId: report.id,
-      action: 'force_release_handle',
-      reasonCode: 'offensive',
-      reasonText: 'Release the reported handle',
-    });
+    await moderateReport(
+      db,
+      { now: () => new Date(frozenAt.getTime() + 1) },
+      {
+        actorUserId: moderator.userId,
+        reportId: report.id,
+        action: 'force_release_handle',
+        reasonCode: 'offensive',
+        reasonText: 'Release the reported handle',
+      },
+    );
 
     const board = await readLeaderboard(db, season.id, sg.id, {
       viewerUserId: target.userId,

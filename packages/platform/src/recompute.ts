@@ -173,14 +173,14 @@ export async function recomputeSeason(
   db: RankingDatabase,
   clock: Clock,
   seasonId: string,
-  options: { force?: boolean } = {},
+  options: { force?: boolean; allowClosed?: boolean } = {},
 ): Promise<boolean> {
   const season = await db
     .select()
     .from(seasons)
     .where(eq(seasons.id, seasonId))
     .then((r) => r[0]);
-  if (!season || season.status === 'closed') return false;
+  if (!season || (season.status === 'closed' && !options.allowClosed)) return false;
   const dirty = await db
     .select()
     .from(rankingDirty)
@@ -295,6 +295,15 @@ export async function recomputeSeason(
       },
     });
   return true;
+}
+
+/** Rebuild read-model rows beside frozen snapshots on an isolated PITR branch. */
+export async function rebuildSeasonForRestoreDrill(
+  db: RankingDatabase,
+  clock: Clock,
+  seasonId: string,
+): Promise<boolean> {
+  return recomputeSeason(db, clock, seasonId, { force: true, allowClosed: true });
 }
 
 export async function recomputeAllDirty(db: Database, clock: Clock): Promise<void> {
