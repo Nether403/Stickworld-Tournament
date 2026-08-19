@@ -65,7 +65,7 @@ describe('Task 6 launch controls', () => {
     expect(tasks).toMatch(/- \[x\] 6\.1 /);
     expect(tasks).toMatch(/- \[ \] 6\.2 /);
     expect(tasks).toMatch(/- \[ \] 6\.3 /);
-    expect(tasks).toMatch(/- \[x\] 6\.4 /);
+    expect(tasks).toMatch(/- \[ \] 6\.4 /);
     expect(tasks).toMatch(/- \[x\] 6\.5 /);
     expect(tasks).toMatch(/- \[ \] 6\.6 /);
   });

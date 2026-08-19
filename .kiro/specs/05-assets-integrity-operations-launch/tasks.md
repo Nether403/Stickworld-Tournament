@@ -166,7 +166,7 @@ CI matrix should be green; real-device rows may complete during
       Task 3. Close season; frozen snapshot. _(R6)_
 - [ ] 6.3 Seed `beta-0` (14 days, 24 invites). Metrics SQL from
       `docs/ops/metrics.md`. Versioned fixes only. _(R7)_
-- [x] 6.4 `docs/known-issues.md` including PR #4 presentation leftovers
+- [ ] 6.4 `docs/known-issues.md` including PR #4 presentation leftovers
       still open. Device-qa captures attached to the launch PR. _(R4.4,
       R8.3)_
 - [x] 6.5 Legal gate: counsel review recorded in

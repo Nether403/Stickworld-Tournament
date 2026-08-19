@@ -11,7 +11,7 @@ import { dailyBoards, gameVersions, games, rankedInvites, seasonGames, seasons }
 
 type SeedPolicy = 'fixed-course' | 'daily-seed' | 'weekly-seed';
 type InviteSeasonSlug = 'internal-0' | 'beta-0';
-type SeedWriter = Pick<Database, 'insert' | 'select'>;
+type SeedWriter = Pick<Database, 'delete' | 'insert' | 'select'>;
 
 export interface GameSeedPlan {
   slug: string;
@@ -141,8 +141,8 @@ function isoWeekMonday(d: Date): string {
 
 function normaliseInviteEmails(inviteEmails: readonly string[]): string[] {
   const normalised = inviteEmails.map((email) => email.trim().toLowerCase());
-  for (const email of normalised) {
-    if (!EMAIL_PATTERN.test(email)) throw new Error(`invalid invite email: ${email || '<empty>'}`);
+  for (const [index, email] of normalised.entries()) {
+    if (!EMAIL_PATTERN.test(email)) throw new Error(`invalid invite email at index ${index + 1}`);
   }
   if (new Set(normalised).size !== normalised.length) {
     throw new Error('duplicate invite email');
@@ -322,8 +322,11 @@ async function seedSeasonPlan(db: SeedWriter, plan: SeasonSeedPlan, now: Date): 
     );
   }
 
-  for (const email of plan.inviteEmails) {
-    await db.insert(rankedInvites).values({ email, invitedAt: now }).onConflictDoNothing();
+  if (plan.season.entryPolicy === 'invite') {
+    await db.delete(rankedInvites);
+    await db
+      .insert(rankedInvites)
+      .values(plan.inviteEmails.map((email) => ({ email, invitedAt: now })));
   }
 
   const seededSeasonGames = await db
