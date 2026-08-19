@@ -20,7 +20,9 @@ The web release command must finish before the new web process starts. It uses
 the direct connection while long-lived web, worker, and cron processes use the
 pooled connection. The worker refuses to enter its job loop if any migration
 listed by the committed Drizzle journal is absent from the database or has a
-different hash.
+different hash. It also refuses to start when a forward migration SQL file is
+not listed in the journal; rollback `*.down.sql` files are excluded from that
+two-way check.
 
 Do not create a Railway domain or TCP proxy for the worker. It does not bind an
 HTTP server. Railway should probe only the web service at `/v1/health`.

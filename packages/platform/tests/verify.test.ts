@@ -1,6 +1,6 @@
 import type { Database } from '@stickworld/db';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { processNextJob } from '../src/verify.js';
+import { processClaimedJob, processNextJob } from '../src/verify.js';
 
 const previousTelemetry = process.env.STICKWORLD_TELEMETRY;
 
@@ -11,6 +11,51 @@ afterEach(() => {
 });
 
 describe('verification worker telemetry', () => {
+  it('emits a reject and duration when a claimed job exceeds max claims', async () => {
+    const database = {
+      update() {
+        const query = {
+          set() {
+            return query;
+          },
+          async where() {},
+        };
+        return query;
+      },
+      insert() {
+        return {
+          async values() {},
+        };
+      },
+    } as unknown as Database;
+    process.env.STICKWORLD_TELEMETRY = '1';
+    const lines: string[] = [];
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      lines.push(String(chunk));
+      return true;
+    });
+
+    await processClaimedJob(
+      database,
+      { now: () => new Date('2026-08-19T00:00:00Z') },
+      { jobId: 'job-1', runId: 'run-1', attempts: 6 },
+      { maxClaims: 5 },
+    );
+
+    const telemetry = lines.map((line) => JSON.parse(line) as Record<string, unknown>);
+    expect(telemetry).toEqual([
+      expect.objectContaining({
+        name: 'verify.reject',
+        reasonCode: 'WORKER_FAULT',
+      }),
+      expect.objectContaining({
+        name: 'verify.duration_ms',
+        reasonCode: 'WORKER_FAULT',
+        durationMs: expect.any(Number),
+      }),
+    ]);
+  });
+
   it('emits a season-tagged reject before duration when an exception exhausts claims', async () => {
     const rows = [
       { id: 'run-1', attemptId: 'attempt-1' },
