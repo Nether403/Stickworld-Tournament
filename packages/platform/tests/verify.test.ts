@@ -133,4 +133,79 @@ describe('verification worker telemetry', () => {
       }),
     ]);
   });
+
+  it('emits the known season when the game version lookup fails', async () => {
+    const rows = [
+      { id: 'run-1', attemptId: 'attempt-1' },
+      { id: 'attempt-1', gameVersionId: 'missing-version', seasonGameId: 'season-game-1' },
+      undefined,
+      {
+        season_games: { seasonId: 'season-1' },
+        games: { slug: 'test-chamber', registryId: 0 },
+      },
+    ];
+    let selectIndex = 0;
+    const database = {
+      select() {
+        const result = Promise.resolve([rows[selectIndex++]]);
+        const query = {
+          from() {
+            return query;
+          },
+          innerJoin() {
+            return query;
+          },
+          where() {
+            return query;
+          },
+          then: result.then.bind(result),
+        };
+        return query;
+      },
+      update() {
+        const query = {
+          set() {
+            return query;
+          },
+          async where() {},
+        };
+        return query;
+      },
+      insert() {
+        return {
+          async values() {},
+        };
+      },
+    } as unknown as Database;
+    process.env.STICKWORLD_TELEMETRY = '1';
+    const lines: string[] = [];
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      lines.push(String(chunk));
+      return true;
+    });
+
+    await processClaimedJob(
+      database,
+      { now: () => new Date('2026-08-19T00:00:00Z') },
+      { jobId: 'job-1', runId: 'run-1', attempts: 1 },
+    );
+
+    const telemetry = lines.map((line) => JSON.parse(line) as Record<string, unknown>);
+    expect(telemetry).toEqual([
+      expect.objectContaining({
+        name: 'verify.reject',
+        reasonCode: 'WRONG_VERSION',
+        seasonId: 'season-1',
+        gameId: 'test-chamber',
+        gameVersion: 'unknown',
+      }),
+      expect.objectContaining({
+        name: 'verify.duration_ms',
+        reasonCode: 'WRONG_VERSION',
+        seasonId: 'season-1',
+        gameId: 'test-chamber',
+        gameVersion: 'unknown',
+      }),
+    ]);
+  });
 });

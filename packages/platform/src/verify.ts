@@ -226,18 +226,18 @@ export async function processClaimedJob(
       .innerJoin(games, eq(games.id, seasonGames.gameId))
       .where(eq(seasonGames.id, attempt.seasonGameId))
       .then((r) => r[0]);
+    if (sg) {
+      telemetryTags = {
+        ...telemetryTags,
+        gameId: sg.games.slug,
+        gameVersion: version?.gameVersion ?? 'unknown',
+        seasonId: sg.season_games.seasonId,
+      };
+    }
     if (!version || !sg) {
       await rejectClaim('WRONG_VERSION', null, clock.now());
       return;
     }
-    telemetryTags = {
-      gameId: sg.games.slug,
-      gameVersion: version.gameVersion,
-      seasonId: sg.season_games.seasonId,
-      mode: 'ranked',
-      browserFamily: 'unknown',
-      deviceClass: 'unknown',
-    };
     const game = GAMES.get(sg.games.registryId);
     if (!game) {
       await rejectClaim('WRONG_VERSION', null, clock.now());
