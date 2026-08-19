@@ -1,3 +1,7 @@
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { expect, test, type Locator } from '@playwright/test';
 
 const BANNED_AI_HOSTS = new Set([
@@ -5,59 +9,100 @@ const BANNED_AI_HOSTS = new Set([
   'api.deepgram.com',
   'openrouter.ai',
 ]);
+const PRODUCTION_CHUNKS_DIR = fileURLToPath(
+  new URL('../.next/static/chunks', import.meta.url),
+);
 
 const PLAY_GAMES = [
   {
     slug: 'hookline-sprint',
     stageTestId: 'hookline-stage',
     instruction: 'Hold to attach',
+    markers: ['hooklineSprintGame', 'mountHooklineClient'],
   },
   {
     slug: 'pickaxe-ascent',
     stageTestId: 'pickaxe-stage',
     instruction: 'Hold to bite',
+    markers: ['pickaxeAscentGame', 'mountPickaxeClient'],
   },
   {
     slug: 'launch-lab',
     stageTestId: 'launch-lab-stage',
     instruction: 'Drag to set aim',
+    markers: ['launchLabGame', 'mountLaunchLabClient'],
   },
   {
     slug: 'ragdoll-archery-rush',
     stageTestId: 'archery-stage',
     instruction: 'Aim from the torso',
+    markers: ['ragdollArcheryRushGame', 'mountArcheryClient'],
   },
   {
     slug: 'hammer-throw-havoc',
     stageTestId: 'hammer-stage',
     instruction: 'Hold D or Right to spin',
+    markers: ['hammerThrowHavocGame', 'mountHammerClient'],
   },
   {
     slug: 'pogo-tower',
     stageTestId: 'pogo-stage',
     instruction: 'Auto-bounce on ledges',
+    markers: ['pogoTowerGame', 'mountPogoClient'],
   },
   {
     slug: 'rooftop-relay',
     stageTestId: 'rooftop-stage',
     instruction: 'Hold Right to run',
+    markers: ['rooftopRelayGame', 'mountRooftopClient'],
   },
   {
     slug: 'balance-bike-blitz',
     stageTestId: 'bike-stage',
     instruction: 'Hold Right to throttle',
+    markers: ['balanceBikeBlitzGame', 'mountBikeClient'],
   },
   {
     slug: 'cargo-chaos',
     stageTestId: 'cargo-stage',
     instruction: 'Aim with the pointer',
+    markers: ['cargoChaosGame', 'mountCargoClient'],
   },
   {
     slug: 'demolition-dive',
     stageTestId: 'demolition-stage',
     instruction: 'Drag to aim from the gantry',
+    markers: ['demolitionDiveGame', 'mountDemolitionClient'],
   },
 ] as const;
+
+function findExclusiveClientChunks() {
+  if (!existsSync(PRODUCTION_CHUNKS_DIR)) return undefined;
+
+  const chunks = readdirSync(PRODUCTION_CHUNKS_DIR, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.js'))
+    .map((entry) => ({
+      filename: entry.name,
+      text: readFileSync(join(PRODUCTION_CHUNKS_DIR, entry.name), 'utf8'),
+    }));
+
+  return new Map(
+    PLAY_GAMES.map((game) => [
+      game.slug,
+      chunks
+        .filter(
+          (chunk) =>
+            game.markers.some((marker) => chunk.text.includes(marker)) &&
+            PLAY_GAMES.every(
+              (other) =>
+                other.slug === game.slug ||
+                other.markers.every((marker) => !chunk.text.includes(marker)),
+            ),
+        )
+        .map((chunk) => chunk.filename),
+    ]),
+  );
+}
 
 async function expectWithinViewport(locator: Locator) {
   const bounds = await locator.evaluate((element) => {
@@ -211,6 +256,16 @@ test('every play route excludes the other nine game client fragments', async ({
   test.setTimeout(600_000);
   const baseURL = testInfo.project.use.baseURL;
   if (typeof baseURL !== 'string') throw new Error('Playwright baseURL is required');
+  const exclusiveClientChunks = findExclusiveClientChunks();
+
+  if (exclusiveClientChunks) {
+    for (const game of PLAY_GAMES) {
+      expect(
+        exclusiveClientChunks.get(game.slug)?.length ?? 0,
+        `production build has no exclusive client chunk for ${game.slug}`,
+      ).toBeGreaterThan(0);
+    }
+  }
 
   for (const game of PLAY_GAMES) {
     const context = await browser.newContext({ baseURL });
@@ -228,10 +283,18 @@ test('every play route excludes the other nine game client fragments', async ({
 
       for (const other of PLAY_GAMES) {
         if (other.slug === game.slug) continue;
-        expect(
-          requested.some((url) => url.toLowerCase().includes(other.slug)),
-          `/play/${game.slug} requested @stickworld/game-${other.slug}`,
-        ).toBe(false);
+        for (const fragment of [other.slug, `@stickworld/game-${other.slug}`]) {
+          expect(
+            requested.some((url) => url.toLowerCase().includes(fragment)),
+            `/play/${game.slug} requested development fragment ${fragment}`,
+          ).toBe(false);
+        }
+        for (const filename of exclusiveClientChunks?.get(other.slug) ?? []) {
+          expect(
+            requested.some((url) => url.includes(filename)),
+            `/play/${game.slug} requested ${other.slug} production chunk ${filename}`,
+          ).toBe(false);
+        }
       }
     } finally {
       await context.close();
