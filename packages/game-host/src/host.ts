@@ -127,7 +127,7 @@ export class GameHost {
     emit('host.start', {
       gameId: this.game.manifest.id,
       gameVersion: this.game.manifest.gameVersion,
-      seasonId: this.session?.seasonId,
+      ...(this.session?.seasonId ? { seasonId: this.session.seasonId } : {}),
       mode: this.mode,
       ...this.clientTags,
     });
@@ -249,7 +249,7 @@ export class GameHost {
     emit('host.finish', {
       gameId: this.game.manifest.id,
       gameVersion: this.game.manifest.gameVersion,
-      seasonId: this.session?.seasonId,
+      ...(this.session?.seasonId ? { seasonId: this.session.seasonId } : {}),
       mode: this.mode,
       ...this.clientTags,
     });
