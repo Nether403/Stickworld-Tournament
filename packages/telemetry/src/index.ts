@@ -10,7 +10,10 @@ export type TelemetryName =
   | 'verify.reject'
   | 'verify.duration_ms'
   | 'attempt.issue'
-  | 'attempt.finish';
+  | 'attempt.finish'
+  | 'cron.start'
+  | 'cron.ok'
+  | 'cron.reject';
 
 export type Tags = {
   gameId: string;

@@ -14,6 +14,7 @@
   "dependencies": {
     "@stickworld/db": "workspace:*",
     "@stickworld/platform": "workspace:*",
+    "@stickworld/telemetry": "workspace:*",
     "@stickworld/game-hookline-sprint": "workspace:*",
     "@stickworld/game-pickaxe-ascent": "workspace:*",
     "@stickworld/game-launch-lab": "workspace:*",

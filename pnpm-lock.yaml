@@ -177,6 +177,9 @@ importers:
       '@stickworld/platform':
         specifier: workspace:*
         version: link:../../packages/platform
+      '@stickworld/telemetry':
+        specifier: workspace:*
+        version: link:../../packages/telemetry
       drizzle-orm:
         specifier: 0.45.2
         version: 0.45.2(@types/pg@8.23.1)(kysely@0.29.5)(pg@8.23.0)
