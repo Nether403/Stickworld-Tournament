@@ -159,6 +159,7 @@ export async function processClaimedJob(
   let telemetryTags: Tags = {
     gameId: 'unknown',
     gameVersion: 'unknown',
+    seasonId: 'unknown',
     mode: 'ranked',
     browserFamily: 'unknown',
     deviceClass: 'unknown',

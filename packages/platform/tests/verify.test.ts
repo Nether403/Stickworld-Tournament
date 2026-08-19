@@ -47,10 +47,12 @@ describe('verification worker telemetry', () => {
       expect.objectContaining({
         name: 'verify.reject',
         reasonCode: 'WORKER_FAULT',
+        seasonId: 'unknown',
       }),
       expect.objectContaining({
         name: 'verify.duration_ms',
         reasonCode: 'WORKER_FAULT',
+        seasonId: 'unknown',
         durationMs: expect.any(Number),
       }),
     ]);
