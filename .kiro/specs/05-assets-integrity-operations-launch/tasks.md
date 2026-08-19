@@ -128,16 +128,16 @@ ref 22.
 
 **Objective:** deploy, observe, roll back, restore. Plan ref 23.
 
-- [ ] 5.1 `GET /v1/health`. Telemetry stdout when
+- [x] 5.1 `GET /v1/health`. Telemetry stdout when
       `STICKWORLD_TELEMETRY=1`; new event names from design §7. Worker
       emits verify ok/reject/duration. _(R5.3, R5.4)_
-- [ ] 5.2 `docs/ops/railway.md`: web / worker / cron start commands, env
+- [x] 5.2 `docs/ops/railway.md`: web / worker / cron start commands, env
       **names**, migrate-on-release, worker not public. Commit Nixpacks or
       Railway config only if the monorepo otherwise will not build. _(R5.1,
       R5.2)_
-- [ ] 5.3 Worker start fails if Drizzle migrations are pending
+- [x] 5.3 Worker start fails if Drizzle migrations are pending
       (`packages/db` journal vs `drizzle/*.sql`). _(R5.2)_
-- [ ] 5.4 `docs/ops/neon.md` restates autosuspend = 0. `docs/ops/metrics.md`
+- [x] 5.4 `docs/ops/neon.md` restates autosuspend = 0. `docs/ops/metrics.md`
       SQL. `docs/ops/rollback.md`. _(R5.5, R5.7)_
 - [ ] 5.5 Staging broken-deploy demo: health 500 → rollback → 200. Record
       evidence in the Task 5 PR body. _(R5.5)_
