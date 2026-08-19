@@ -1,4 +1,4 @@
-# Stickworld Competitive Specification
+# Stickworld Competitive Specification — Version 2
 
 This is the rulebook simulation code may depend on. It is short on purpose. If a
 later spec disagrees with this file, **this file wins** until it is explicitly
@@ -26,12 +26,12 @@ leaderboard.
 
 ## 2. Time
 
-| Constant | Value |
-|---|---|
-| Tick rate | **60 Hz** |
-| Timestep | exactly `1/60` seconds |
-| Time unit inside simulation | integer `tick`, starting at 0 |
-| Wall clock | forbidden inside simulation and scoring |
+| Constant                    | Value                                   |
+| --------------------------- | --------------------------------------- |
+| Tick rate                   | **60 Hz**                               |
+| Timestep                    | exactly `1/60` seconds                  |
+| Time unit inside simulation | integer `tick`, starting at 0           |
+| Wall clock                  | forbidden inside simulation and scoring |
 
 Rendering uses an accumulator. Whole ticks are consumed; the fractional
 remainder interpolates presentation only.
@@ -90,14 +90,14 @@ variant) constructed from that seed. See `docs/adr/0003-prng-choice.md`.
 
 ## 6. Replay
 
-| Field | Value |
-|---|---|
-| Magic | ASCII `SWR1` |
-| Format version | `1` |
-| Contents | inputs only — never positions, velocities, or client-computed state |
-| Analog inputs | quantised to integers **at capture time**, per the game's action table |
-| Integrity | CRC-32 over header+body, plus final 64-bit state hash |
-| Storage | gzip-compressed `bytea` in Postgres |
+| Field          | Value                                                                  |
+| -------------- | ---------------------------------------------------------------------- |
+| Magic          | ASCII `SWR1`                                                           |
+| Format version | `1`                                                                    |
+| Contents       | inputs only — never positions, velocities, or client-computed state    |
+| Analog inputs  | quantised to integers **at capture time**, per the game's action table |
+| Integrity      | CRC-32 over header+body, plus final 64-bit state hash                  |
+| Storage        | gzip-compressed `bytea` in Postgres                                    |
 
 A 90-second single-action run must encode under 5 KB compressed.
 
@@ -171,8 +171,14 @@ snapshot is fully rebuildable from verified results.
 
 ## 11. Championship points
 
-Each of the ten games contributes 0–1,000 points. Non-participation is 0.
-All ten count. Daily-ladder results do **not** count.
+Each championship game contributes 0–1,000 points. Championship games
+are the season's `fixed-course` titles. Weekly-seed and daily-seed
+boards do not contribute. At launch that is nine games (Pogo Tower is
+weekly-only). Non-participation is 0. Maximum championship total is
+9,000.
+
+Future `season-1` uses `seasons.rules_version = 2` after the public-launch
+gates clear. This amendment does not authorize creating or opening that season.
 
 A game contributes championship points only at **≥ 50 verified entrants**.
 Below that it displays as provisional.
@@ -205,7 +211,8 @@ Published order, stop at the first difference:
 
 1. Most per-game wins (place 1 on a game).
 2. Most top-10 finishes.
-3. Highest median of the ten game point totals.
+3. Highest median of the championship-game point totals (nine values;
+   missing = 0).
 4. Earliest `achieved_at` of the championship total.
 
 Standings are recomputed on a schedule and labelled `as of <timestamp>`.
@@ -221,14 +228,14 @@ championship.
 These are competition-affecting. Changing any of them on an in-season game
 means a new `game_version` and a new leaderboard, not a silent patch.
 
-| Pin | Meaning |
-|---|---|
-| `game_version` | content, geometry, timing windows |
-| `simulation_version` | tick contract, stepper, body order, hash |
-| `scoring_version` | event types and aggregation |
-| `DETMATH_VERSION` | numeric change to detmath |
-| Rapier package + SHA-256 of the inlined WASM | physics build |
-| `REPLAY_FORMAT_VERSION` | bytes on the wire |
+| Pin                                          | Meaning                                  |
+| -------------------------------------------- | ---------------------------------------- |
+| `game_version`                               | content, geometry, timing windows        |
+| `simulation_version`                         | tick contract, stepper, body order, hash |
+| `scoring_version`                            | event types and aggregation              |
+| `DETMATH_VERSION`                            | numeric change to detmath                |
+| Rapier package + SHA-256 of the inlined WASM | physics build                            |
+| `REPLAY_FORMAT_VERSION`                      | bytes on the wire                        |
 
 Golden determinism hashes are the contract. Regenerating them to "fix" CI
 requires an ADR.

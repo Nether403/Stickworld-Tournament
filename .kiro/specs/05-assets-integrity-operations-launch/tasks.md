@@ -158,7 +158,7 @@ and PITR evidence.
 CI matrix should be green; real-device rows may complete during
 `internal-0`.
 
-- [ ] 6.1 Amend `docs/competitive-spec.md` §11 (design §12). `rules_version
+- [x] 6.1 Amend `docs/competitive-spec.md` §11 (design §12). `rules_version
       = 2`. `docs/rulebook.md` player-facing. Championship UI copy: nine
       games, Pogo weekly-only, max 9,000. _(R8.2, R8.3, R8.4)_
 - [ ] 6.2 Seed `internal-0` invite season. Staff in `ranked_invites`. Run
@@ -166,10 +166,10 @@ CI matrix should be green; real-device rows may complete during
       Task 3. Close season; frozen snapshot. _(R6)_
 - [ ] 6.3 Seed `beta-0` (14 days, 24 invites). Metrics SQL from
       `docs/ops/metrics.md`. Versioned fixes only. _(R7)_
-- [ ] 6.4 `docs/known-issues.md` including PR #4 presentation leftovers
+- [x] 6.4 `docs/known-issues.md` including PR #4 presentation leftovers
       still open. Device-qa captures attached to the launch PR. _(R4.4,
       R8.3)_
-- [ ] 6.5 Legal gate: counsel review recorded in
+- [x] 6.5 Legal gate: counsel review recorded in
       `docs/legal/brand-and-ip-clearance.md`. If uncleared, **do not**
       open `season-1` to the public; stop and report. _(R8.5)_
 - [ ] 6.6 Open `season-1` (`open`, 28 days) only after freeze checklist
