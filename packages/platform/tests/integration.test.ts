@@ -110,8 +110,9 @@ async function captureTelemetry(run: () => Promise<void>): Promise<Array<Record<
 
 function withoutAsOf(payload: unknown): unknown {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return payload;
-  const { asOf: _asOf, ...rest } = payload as Record<string, unknown>;
-  return rest;
+  const normalized = { ...(payload as Record<string, unknown>) };
+  delete normalized.asOf;
+  return normalized;
 }
 
 describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
