@@ -299,11 +299,37 @@ export async function recomputeSeason(
 
 /** Rebuild read-model rows beside frozen snapshots on an isolated PITR branch. */
 export async function rebuildSeasonForRestoreDrill(
-  db: RankingDatabase,
+  db: Database,
   clock: Clock,
   seasonId: string,
 ): Promise<boolean> {
-  return recomputeSeason(db, clock, seasonId, { force: true, allowClosed: true });
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`
+      DELETE FROM game_bests
+      USING season_games
+      WHERE game_bests.season_game_id = season_games.id
+        AND season_games.season_id = ${seasonId}
+    `);
+    await tx.execute(sql`
+      INSERT INTO game_bests (season_game_id, user_id, verified_result_id, score)
+      SELECT DISTINCT ON (verified_results.season_game_id, verified_results.user_id)
+        verified_results.season_game_id,
+        verified_results.user_id,
+        verified_results.id,
+        verified_results.score
+      FROM verified_results
+      INNER JOIN season_games ON season_games.id = verified_results.season_game_id
+      WHERE season_games.season_id = ${seasonId}
+      ORDER BY
+        verified_results.season_game_id,
+        verified_results.user_id,
+        verified_results.score DESC,
+        verified_results.achieved_at ASC,
+        verified_results.created_at ASC,
+        verified_results.id ASC
+    `);
+    return recomputeSeason(tx, clock, seasonId, { force: true, allowClosed: true });
+  });
 }
 
 export async function recomputeAllDirty(db: Database, clock: Clock): Promise<void> {

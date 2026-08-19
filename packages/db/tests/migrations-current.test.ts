@@ -100,4 +100,20 @@ describe('migration startup guard', () => {
 
     expect(() => readMigrationManifest(fixture.path)).toThrow('0000_test.sql');
   });
+
+  it('fails closed when a forward SQL file is absent from the journal', () => {
+    const fixture = migrationFolder();
+    writeFileSync(join(fixture.path, '0001_unjournaled.sql'), 'select 2;\n');
+
+    expect(() => readMigrationManifest(fixture.path)).toThrow(
+      'Unjournaled database migrations: 0001_unjournaled',
+    );
+  });
+
+  it('allows rollback SQL files to be absent from the journal', () => {
+    const fixture = migrationFolder();
+    writeFileSync(join(fixture.path, '0000_test.down.sql'), 'select 0;\n');
+
+    expect(readMigrationManifest(fixture.path)).toHaveLength(1);
+  });
 });

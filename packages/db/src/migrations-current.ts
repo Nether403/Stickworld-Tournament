@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -28,6 +28,20 @@ export function readMigrationManifest(
   const journal = JSON.parse(readFileSync(journalPath, 'utf8')) as Journal;
   if (!Array.isArray(journal.entries)) {
     throw new Error(`Invalid Drizzle migration journal: ${journalPath}`);
+  }
+
+  const journalTags = new Set(
+    journal.entries.flatMap((entry) => (typeof entry.tag === 'string' ? [entry.tag] : [])),
+  );
+  const unjournaled = readdirSync(migrationsFolder, { withFileTypes: true })
+    .filter(
+      (entry) => entry.isFile() && entry.name.endsWith('.sql') && !entry.name.endsWith('.down.sql'),
+    )
+    .map((entry) => entry.name.slice(0, -'.sql'.length))
+    .filter((tag) => !journalTags.has(tag))
+    .sort();
+  if (unjournaled.length > 0) {
+    throw new Error(`Unjournaled database migrations: ${unjournaled.join(', ')}`);
   }
 
   return journal.entries.map((entry) => {

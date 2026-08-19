@@ -60,11 +60,16 @@ throwaway branch.
 ## 3. Rebuild and compare
 
 The restore-only helper writes new non-frozen snapshots beside the untouched
-frozen rows:
+frozen rows. It refuses to run unless the explicit restore-drill opt-in is set
+and the target season is already `closed`:
 
 ```bash
-pnpm --filter @stickworld/worker pitr-rebuild <closed-season-slug>
+STICKWORLD_PITR_REBUILD=1 pnpm --filter @stickworld/worker pitr-rebuild <closed-season-slug>
 ```
+
+Set `STICKWORLD_PITR_REBUILD` only in the isolated drill shell, never as a
+persistent Railway or production environment variable. An active, scheduled,
+or closing season fails the command even when the opt-in is set.
 
 Run this on the drill branch:
 

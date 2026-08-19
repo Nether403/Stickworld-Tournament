@@ -679,6 +679,7 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
     const { season, sg } = await createIsolatedSeason(db, `restore-${randomUUID().slice(0, 8)}`);
     const profile = await upsertProfile(db, `restore-${randomUUID()}`);
     await insertVerifiedBest(db, profile.userId, sg.id, 321n);
+    await insertVerifiedBest(db, profile.userId, sg.id, 123n);
     await recomputeSeason(db, c.clock, season.id, { force: true });
     await closeSeason(db, c.clock, season.id);
     const frozen = await db
@@ -686,6 +687,7 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
       .from(rankingSnapshots)
       .where(and(eq(rankingSnapshots.seasonId, season.id), eq(rankingSnapshots.frozen, true)));
     const frozenBytes = new Map(frozen.map((row) => [row.id, JSON.stringify(row.payload)]));
+    await db.delete(gameBests).where(eq(gameBests.seasonGameId, sg.id));
 
     const rebuilt = await rebuildSeasonForRestoreDrill(
       db,
@@ -709,6 +711,12 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
       expect(withoutAsOf(liveSnapshot?.payload)).toEqual(withoutAsOf(frozenSnapshot.payload));
       expect(JSON.stringify(frozenSnapshot.payload)).toBe(frozenBytes.get(frozenSnapshot.id));
     }
+    const reconstructedBest = await db
+      .select()
+      .from(gameBests)
+      .where(and(eq(gameBests.seasonGameId, sg.id), eq(gameBests.userId, profile.userId)))
+      .then((rows) => rows[0]);
+    expect(reconstructedBest?.score).toBe(321n);
   });
 
   it('serves frozen rankings and overlays anonymised handles without changing snapshot bytes', async () => {

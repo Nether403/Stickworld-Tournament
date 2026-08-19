@@ -25,6 +25,12 @@ different hash.
 Do not create a Railway domain or TCP proxy for the worker. It does not bind an
 HTTP server. Railway should probe only the web service at `/v1/health`.
 
+Browser-side `host.start` and `host.finish` events cannot appear in Railway
+stdout because the game host runs in the user's browser, not in a Railway Node
+process. This repository intentionally has no browser telemetry POST or beacon
+endpoint. Railway log checks cover server-side web events such as
+`attempt.issue` and `attempt.finish`, plus worker and cron telemetry.
+
 ## Environment variable names
 
 Configure only the names each service needs; store values in Railway, never in

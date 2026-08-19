@@ -155,6 +155,7 @@ export async function processClaimedJob(
   options: { maxClaims?: number } = {},
 ): Promise<void> {
   const startedAt = performance.now();
+  const maxClaims = options.maxClaims ?? WORKER_MAX_CLAIMS;
   let telemetryTags: Tags = {
     gameId: 'unknown',
     gameVersion: 'unknown',
@@ -173,7 +174,6 @@ export async function processClaimedJob(
   };
 
   try {
-    const maxClaims = options.maxClaims ?? WORKER_MAX_CLAIMS;
     if (job.attempts > maxClaims) {
       await db
         .update(scoreSubmissions)
@@ -348,6 +348,12 @@ export async function processClaimedJob(
     } finally {
       sim.dispose();
     }
+  } catch (error) {
+    if (job.attempts >= maxClaims) {
+      outcomeReasonCode = 'WORKER_FAULT';
+      emit('verify.reject', { ...telemetryTags, reasonCode: outcomeReasonCode });
+    }
+    throw error;
   } finally {
     emit('verify.duration_ms', {
       ...telemetryTags,
