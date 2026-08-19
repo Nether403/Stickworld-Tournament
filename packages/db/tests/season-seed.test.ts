@@ -21,7 +21,7 @@ function createMemorySeedDb() {
 
   const rows = new Map<object, Row[]>();
   let currentSeasonId: string | undefined;
-  let lastValues = new Map<object, Row>();
+  const lastValues = new Map<object, Row>();
   let nextId = 0;
 
   const tableRows = (table: object): Row[] => {
@@ -181,10 +181,7 @@ describe('season seed plans', () => {
   it('replaces internal invites with exactly the beta invite file', async () => {
     const memory = createMemorySeedDb();
     const staffEmails = ['staff.one@example.com', 'staff.two@example.com'];
-    const betaEmails = Array.from(
-      { length: 24 },
-      (_, index) => `beta-${index + 1}@example.com`,
-    );
+    const betaEmails = Array.from({ length: 24 }, (_, index) => `beta-${index + 1}@example.com`);
 
     await seedInviteSeason(memory.db, {
       slug: 'internal-0',
@@ -219,7 +216,9 @@ describe('invite email parsing', () => {
   it('reports an invalid invite by index without exposing its address', () => {
     const invalidAddress = 'private-address';
 
-    expect(() => parseInviteEmails(`${invalidAddress}\n`)).toThrow('invalid invite email at index 1');
+    expect(() => parseInviteEmails(`${invalidAddress}\n`)).toThrow(
+      'invalid invite email at index 1',
+    );
     expect(() => parseInviteEmails(`${invalidAddress}\n`)).not.toThrow(invalidAddress);
   });
 });
