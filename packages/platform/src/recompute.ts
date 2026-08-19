@@ -4,12 +4,15 @@ import {
   profiles,
   rankingDirty,
   rankingSnapshots,
+  runs,
+  scoreSubmissions,
   seasonGames,
   seasons,
+  verificationJobs,
   verifiedResults,
   type Database,
 } from '@stickworld/db';
-import { and, asc, eq, gt, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, or, sql } from 'drizzle-orm';
 import type { Clock } from './context.js';
 import {
   ATTEMPT_TTL_SECONDS,
@@ -355,10 +358,22 @@ export async function closeSeason(db: Database, clock: Clock, seasonId: string):
       .select({ id: attempts.id })
       .from(attempts)
       .innerJoin(seasonGames, eq(seasonGames.id, attempts.seasonGameId))
+      .leftJoin(runs, eq(runs.attemptId, attempts.id))
+      .leftJoin(verificationJobs, eq(verificationJobs.runId, runs.id))
+      .leftJoin(scoreSubmissions, eq(scoreSubmissions.runId, runs.id))
       .where(
         and(
           eq(seasonGames.seasonId, seasonId),
-          inArray(attempts.status, ['issued', 'active']),
+          or(
+            inArray(attempts.status, ['issued', 'active']),
+            and(
+              eq(attempts.status, 'submitted'),
+              or(
+                inArray(verificationJobs.state, ['queued', 'locked']),
+                eq(scoreSubmissions.verificationStatus, 'pending'),
+              ),
+            ),
+          ),
           gt(attempts.expiresAt, now),
           sql`${attempts.issuedAt} + (${ATTEMPT_TTL_SECONDS} * interval '1 second') > ${now}`,
         ),

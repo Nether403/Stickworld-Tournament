@@ -1085,6 +1085,87 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
     ).resolves.toMatchObject({ dailyCapRemaining: 4 });
   });
 
+  it('prefers an invite launch season over ci when both contain the game window', async () => {
+    const now = new Date('2026-08-18T20:30:00.000Z');
+    const suffix = randomUUID().replaceAll('-', '');
+    const ciSeason = await db
+      .select()
+      .from(seasons)
+      .where(eq(seasons.slug, 'ci'))
+      .then((rows) => rows[0]);
+    if (!ciSeason) throw new Error('missing ci season');
+    await db
+      .update(seasons)
+      .set({ status: 'active', entryPolicy: 'open' })
+      .where(eq(seasons.id, ciSeason.id));
+
+    const gameSlug = `launch-preference-${suffix}`;
+    const registryId = 20_000 + (Number.parseInt(suffix.slice(0, 8), 16) % 40_000);
+    await seedGame(
+      db,
+      ciSeason.id,
+      {
+        slug: gameSlug,
+        registryId,
+        maxRunTicks: 600,
+        seedPolicies: ['fixed-course'],
+      },
+      now,
+    );
+    const [launchSeason] = await db
+      .insert(seasons)
+      .values({
+        slug: `internal-0-${suffix}`,
+        startsAt: new Date('2020-01-01T00:00:00.000Z'),
+        endsAt: new Date('2099-01-01T00:00:00.000Z'),
+        status: 'active',
+        rulesVersion: 1,
+        entryPolicy: 'invite',
+      })
+      .returning();
+    if (!launchSeason) throw new Error('failed to create launch season');
+    await seedGame(
+      db,
+      launchSeason.id,
+      {
+        slug: gameSlug,
+        registryId,
+        maxRunTicks: 600,
+        seedPolicies: ['fixed-course'],
+      },
+      now,
+    );
+
+    const invitedEmail = `invited-${suffix}@example.com`;
+    const invited = await upsertProfile(db, `launch-invited-${randomUUID()}`, invitedEmail);
+    await claimHandle(db, { now: () => now }, invited.userId, `l${randomUUID().slice(0, 8)}`);
+    await db.insert(rankedInvites).values({ email: invitedEmail, invitedAt: now });
+    const issueCtx = goldenEntropy();
+    issueCtx.clock = { now: () => now };
+    await expect(
+      issueAttempt(db, issueCtx, {
+        userId: invited.userId,
+        email: invitedEmail,
+        gameSlug,
+        seedPolicy: 'fixed-course',
+        ip: '203.0.113.103',
+      }),
+    ).resolves.toMatchObject({ seasonId: launchSeason.id });
+
+    const uninvitedEmail = `uninvited-${suffix}@example.com`;
+    const uninvited = await upsertProfile(db, `launch-uninvited-${randomUUID()}`, uninvitedEmail);
+    await claimHandle(db, { now: () => now }, uninvited.userId, `n${randomUUID().slice(0, 8)}`);
+    await expect(
+      issueAttempt(db, issueCtx, {
+        userId: uninvited.userId,
+        email: uninvitedEmail,
+        gameSlug,
+        seedPolicy: 'fixed-course',
+        ip: '203.0.113.104',
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_INVITED' });
+  });
+
   it('requires an invite for invite seasons and lets moderators bypass it', async () => {
     const now = new Date('2026-08-18T21:00:00.000Z');
     const suffix = randomUUID().slice(0, 8);
@@ -1204,6 +1285,97 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
         .from(rankingSnapshots)
         .where(and(eq(rankingSnapshots.seasonId, season.id), eq(rankingSnapshots.frozen, true))),
     ).not.toHaveLength(0);
+  });
+
+  it('waits for pending submitted verification before freezing its score', async () => {
+    const start = new Date('2026-08-18T22:15:00.000Z');
+    const { season, sg } = await createIsolatedSeason(
+      db,
+      `pending-close-${randomUUID().slice(0, 8)}`,
+    );
+    const profile = await upsertProfile(db, `pending-close-${randomUUID()}`);
+    const attemptId = randomUUID();
+    const runId = randomUUID();
+    await db.insert(attempts).values({
+      id: attemptId,
+      userId: profile.userId,
+      seasonGameId: sg.id,
+      gameVersionId: sg.gameVersionId,
+      seed: packSeed([1, 2, 3, 4]),
+      nonce: randomBytes(16),
+      issuedAt: start,
+      expiresAt: new Date(start.getTime() + 15 * 60 * 1000),
+      status: 'submitted',
+      consumedAt: start,
+    });
+    await db.insert(runs).values({
+      id: runId,
+      attemptId,
+      userId: profile.userId,
+      claimedScore: 987n,
+      totalTicks: 1,
+      replay: Buffer.from([1]),
+      finalStateHash: Buffer.alloc(8),
+    });
+    await db.insert(scoreSubmissions).values({ runId, verificationStatus: 'pending' });
+    await db.insert(verificationJobs).values({ runId, state: 'queued' });
+
+    await closeSeason(db, { now: () => start }, season.id);
+    const closing = await db
+      .select({ status: seasons.status })
+      .from(seasons)
+      .where(eq(seasons.id, season.id))
+      .then((rows) => rows[0]);
+    expect(closing?.status).toBe('closing');
+    expect(
+      await db
+        .select()
+        .from(rankingSnapshots)
+        .where(and(eq(rankingSnapshots.seasonId, season.id), eq(rankingSnapshots.frozen, true))),
+    ).toHaveLength(0);
+
+    const verifiedAt = new Date(start.getTime() + 1_000);
+    await db
+      .update(scoreSubmissions)
+      .set({ verificationStatus: 'verified', verifiedScore: 987n, verifiedAt })
+      .where(eq(scoreSubmissions.runId, runId));
+    await db
+      .update(verificationJobs)
+      .set({ state: 'done' })
+      .where(eq(verificationJobs.runId, runId));
+    const [result] = await db
+      .insert(verifiedResults)
+      .values({
+        userId: profile.userId,
+        seasonGameId: sg.id,
+        runId,
+        score: 987n,
+        achievedAt: verifiedAt,
+      })
+      .returning();
+    await db.insert(gameBests).values({
+      seasonGameId: sg.id,
+      userId: profile.userId,
+      verifiedResultId: result!.id,
+      score: 987n,
+    });
+
+    await closeSeason(db, { now: () => verifiedAt }, season.id);
+    const closed = await db
+      .select({ status: seasons.status })
+      .from(seasons)
+      .where(eq(seasons.id, season.id))
+      .then((rows) => rows[0]);
+    expect(closed?.status).toBe('closed');
+    const frozen = await readStandings(db, season.id);
+    expect(frozen.rows).toContainEqual(
+      expect.objectContaining({
+        userId: profile.userId,
+        games: expect.objectContaining({
+          [sg.id]: expect.objectContaining({ rank: 1 }),
+        }),
+      }),
+    );
   });
 
   it('serializes attempt issuance with season closure', async () => {

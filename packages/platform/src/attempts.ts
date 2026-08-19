@@ -9,7 +9,7 @@ import {
   seasons,
   type Database,
 } from '@stickworld/db';
-import { and, asc, eq, gte, isNull, lt, sql } from 'drizzle-orm';
+import { and, asc, eq, gte, isNull, lt, lte, sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { audit } from './audit.js';
 import { signAttemptToken } from './attempt-token.js';
@@ -99,6 +99,7 @@ export async function issueAttempt(
       .then((r) => r[0]);
     if (!game) throw new ApiError('SEASON_INACTIVE');
 
+    // Prefer a launch season over the CI fallback; multiple launch matches use slug order.
     const sg = await db
       .select()
       .from(seasonGames)
@@ -108,14 +109,13 @@ export async function issueAttempt(
           eq(seasonGames.gameId, game.id),
           eq(seasonGames.seedPolicy, input.seedPolicy),
           eq(seasons.status, 'active'),
+          lte(seasonGames.activeFrom, now),
+          gte(seasonGames.activeTo, now),
         ),
       )
-      .orderBy(asc(seasons.slug))
+      .orderBy(sql`CASE WHEN ${seasons.slug} = 'ci' THEN 1 ELSE 0 END`, asc(seasons.slug))
       .then((r) => r[0]);
     if (!sg) throw new ApiError('SEASON_INACTIVE');
-    if (now < sg.season_games.activeFrom || now > sg.season_games.activeTo) {
-      throw new ApiError('SEASON_INACTIVE');
-    }
 
     let invite: typeof rankedInvites.$inferSelect | undefined;
     if (sg.seasons.entryPolicy === 'invite') {
