@@ -18,6 +18,7 @@ export const REASON_MESSAGES = {
   HANDLE_TAKEN: 'That handle is taken.',
   HANDLE_INVALID: 'That handle is not allowed.',
   RATE_LIMITED: 'Slow down.',
+  UGC_REPORT_RATE: 'Too many reports. Try again later.',
   ATTEMPT_EXPIRED: 'That attempt expired.',
   ATTEMPT_CONSUMED: 'That attempt was already used.',
   ATTEMPT_NOT_FOUND: 'Attempt not found.',
@@ -26,13 +27,15 @@ export const REASON_MESSAGES = {
   WRONG_USER: 'Attempt not found.',
   SEED_DEGENERATE: 'Server refused to issue a degenerate seed.',
   DAILY_CAP: 'Daily attempt cap reached.',
+  NOT_INVITED: 'This ranked season is invite-only.',
   SEASON_INACTIVE: 'This season is not accepting ranked runs.',
   SCORE_ENVELOPE: 'Claimed score is outside the allowed range.',
   CADENCE: 'Input cadence is implausible.',
-  DURATION: 'Run duration is outside the game\'s limits.',
+  DURATION: "Run duration is outside the game's limits.",
   HANDLE_COOLDOWN: 'You can change your handle again later.',
   WORKER_FAULT: 'Verification failed. Try submitting again.',
   BAD_CURSOR: 'Invalid cursor.',
+  ALREADY_ANONYMISED: 'This profile is already anonymised.',
   INTERNAL: 'Something went wrong.',
 } as const;
 
@@ -53,12 +56,15 @@ export function httpStatus(code: ReasonCode): number {
     case 'UNAUTHENTICATED':
       return 401;
     case 'RATE_LIMITED':
+    case 'UGC_REPORT_RATE':
     case 'DAILY_CAP':
     case 'HANDLE_COOLDOWN':
       return 429;
     case 'HANDLE_TAKEN':
+    case 'ALREADY_ANONYMISED':
       return 409;
     case 'SEASON_INACTIVE':
+    case 'NOT_INVITED':
     case 'FORBIDDEN':
       return code === 'FORBIDDEN' ? 404 : 403;
     case 'ATTEMPT_NOT_FOUND':

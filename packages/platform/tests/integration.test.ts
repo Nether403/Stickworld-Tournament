@@ -1,10 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { randomBytes, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { gunzipSync, gzipSync } from 'node:zlib';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   applyMigrations,
+  attempts,
+  auditEvents,
   createDb,
   createDirectPool,
   dailyBoards,
@@ -12,12 +15,18 @@ import {
   gameVersions,
   games,
   hasDatabaseUrl,
+  moderationActions,
+  profiles,
+  rankedInvites,
+  rankingDirty,
   rankingSnapshots,
   runs,
   scoreSubmissions,
   seasonGames,
   seasons,
   seedDatabase,
+  seedGame,
+  ugcReports,
   verificationJobs,
   verifiedResults,
   type Database,
@@ -28,11 +37,24 @@ import { claimHandle, upsertProfile } from '../src/profiles.js';
 import { issueAttempt } from '../src/attempts.js';
 import { finishAttempt } from '../src/finish.js';
 import { processClaimedJob, processNextJob } from '../src/verify.js';
-import { closeSeason, readLeaderboard, readStandings, recomputeSeason } from '../src/recompute.js';
+import {
+  closeSeason,
+  readLeaderboard,
+  readStandings,
+  rebuildSeasonForRestoreDrill,
+  recomputeSeason,
+} from '../src/recompute.js';
 import { rotateDaily } from '../src/daily.js';
 import { packSeed, unpackSeed, uuidToBytes } from '../src/seed128.js';
 import { floorWindow, hitRateLimit } from '../src/rate-limit.js';
 import type { PlatformContext } from '../src/context.js';
+import {
+  fileReport,
+  listModerationReports,
+  listUserNotices,
+  moderateReport,
+} from '../src/moderation.js';
+import { anonymiseProfile, exportUserData } from '../src/privacy.js';
 import pg from 'pg';
 
 const SAMPLE = readFileSync(
@@ -58,6 +80,39 @@ function goldenEntropy(): PlatformContext {
       },
     },
   });
+}
+
+async function replayForAttempt(attemptId: string): Promise<Buffer> {
+  const decoded = await decodeReplay(SAMPLE);
+  if (!decoded.ok) throw new Error('invalid sample fixture');
+  return Buffer.from(
+    await encodeReplay({ ...decoded.header, attemptId: uuidToBytes(attemptId) }, decoded.events),
+  );
+}
+
+async function captureTelemetry(run: () => Promise<void>): Promise<Array<Record<string, unknown>>> {
+  const previous = process.env.STICKWORLD_TELEMETRY;
+  process.env.STICKWORLD_TELEMETRY = '1';
+  const lines: string[] = [];
+  const write = vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+    lines.push(String(chunk));
+    return true;
+  });
+  try {
+    await run();
+  } finally {
+    write.mockRestore();
+    if (previous === undefined) delete process.env.STICKWORLD_TELEMETRY;
+    else process.env.STICKWORLD_TELEMETRY = previous;
+  }
+  return lines.map((line) => JSON.parse(line) as Record<string, unknown>);
+}
+
+function withoutAsOf(payload: unknown): unknown {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return payload;
+  const normalized = { ...(payload as Record<string, unknown>) };
+  delete normalized.asOf;
+  return normalized;
 }
 
 describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
@@ -112,7 +167,20 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
 
   it('rejects unauthenticated ranked issue at the profile gate', async () => {
     const { requireRankedUser } = await import('../src/profiles.js');
-    await expect(requireRankedUser(db, undefined)).rejects.toMatchObject({ code: 'UNAUTHENTICATED' });
+    await expect(requireRankedUser(db, undefined)).rejects.toMatchObject({
+      code: 'UNAUTHENTICATED',
+    });
+  });
+
+  it('requires active status at the ranked profile gate', async () => {
+    const { requireRankedUser } = await import('../src/profiles.js');
+    const authUserId = `ranked-status-${randomUUID()}`;
+    const profile = await upsertProfile(db, authUserId);
+    await claimHandle(db, c.clock, profile.userId, `a${randomUUID().slice(0, 8)}`);
+    for (const status of ['suspended', 'anonymised'] as const) {
+      await db.update(profiles).set({ status }).where(eq(profiles.userId, profile.userId));
+      await expect(requireRankedUser(db, authUserId)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    }
   });
 
   it('refuses a degenerate all-zero seed', async () => {
@@ -154,6 +222,11 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
       ip: '10.0.0.2',
     });
     expect(issued.seed).toEqual([5, 6, 7, 8]);
+    expect(issued).toMatchObject({
+      gameId: 'test-chamber',
+      gameVersion: '1.0.0',
+      seasonId: expect.any(String),
+    });
     const decoded = await decodeReplay(SAMPLE);
     expect(decoded.ok).toBe(true);
     if (!decoded.ok) return;
@@ -168,9 +241,36 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
       replayB64: Buffer.from(replay).toString('base64'),
       claimedScore: '302',
     });
-    expect(finished.status).toBe('pending');
-    const processed = await processNextJob(db, issueCtx.clock, 'worker-1', { staleLockSeconds: 0 });
+    expect(finished).toMatchObject({
+      status: 'pending',
+      gameId: 'test-chamber',
+      gameVersion: '1.0.0',
+      seasonId: issued.seasonId,
+    });
+    let processed = false;
+    const telemetry = await captureTelemetry(async () => {
+      processed = await processNextJob(db, issueCtx.clock, 'worker-1', { staleLockSeconds: 0 });
+    });
     expect(processed).toBe(true);
+    expect(telemetry).toEqual([
+      expect.objectContaining({
+        name: 'verify.ok',
+        gameId: 'test-chamber',
+        gameVersion: '1.0.0',
+        seasonId: issued.seasonId,
+        browserFamily: 'unknown',
+        deviceClass: 'unknown',
+        mode: 'ranked',
+        reasonCode: 'OK',
+      }),
+      expect.objectContaining({
+        name: 'verify.duration_ms',
+        gameId: 'test-chamber',
+        gameVersion: '1.0.0',
+        seasonId: issued.seasonId,
+        durationMs: expect.any(Number),
+      }),
+    ]);
     const sub = await db
       .select()
       .from(scoreSubmissions)
@@ -178,11 +278,16 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
       .then((r) => r[0]);
     expect(sub?.verificationStatus).toBe('verified');
     expect(sub?.verifiedScore).toBe(302n);
-    expect(sub?.verifiedHash && Buffer.from(sub.verifiedHash).readBigUInt64LE(0).toString(16).padStart(16, '0')).toBe(
-      'e6ee35729a0c77b3',
-    );
+    expect(
+      sub?.verifiedHash &&
+        Buffer.from(sub.verifiedHash).readBigUInt64LE(0).toString(16).padStart(16, '0'),
+    ).toBe('e6ee35729a0c77b3');
 
-    const season = await db.select().from(seasons).where(eq(seasons.slug, 'ci')).then((r) => r[0]);
+    const season = await db
+      .select()
+      .from(seasons)
+      .where(eq(seasons.slug, 'ci'))
+      .then((r) => r[0]);
     const sg = await db
       .select({ id: seasonGames.id })
       .from(seasonGames)
@@ -225,7 +330,20 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
       replayB64: Buffer.from(replay).toString('base64'),
       claimedScore: '999999999',
     });
-    await processNextJob(db, issueCtx.clock, 'worker-2', { staleLockSeconds: 0 });
+    const telemetry = await captureTelemetry(async () => {
+      await processNextJob(db, issueCtx.clock, 'worker-2', { staleLockSeconds: 0 });
+    });
+    expect(telemetry).toEqual([
+      expect.objectContaining({
+        name: 'verify.reject',
+        reasonCode: 'SCORE_MISMATCH',
+      }),
+      expect.objectContaining({
+        name: 'verify.duration_ms',
+        reasonCode: 'SCORE_MISMATCH',
+        durationMs: expect.any(Number),
+      }),
+    ]);
     const sub = await db
       .select()
       .from(scoreSubmissions)
@@ -233,7 +351,10 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
       .then((r) => r[0]);
     expect(sub?.verificationStatus).toBe('rejected');
     expect(sub?.reasonCode).toBe('SCORE_MISMATCH');
-    const verified = await db.select().from(verifiedResults).where(eq(verifiedResults.runId, finished.runId));
+    const verified = await db
+      .select()
+      .from(verifiedResults)
+      .where(eq(verifiedResults.runId, finished.runId));
     expect(verified).toHaveLength(0);
   });
 
@@ -262,7 +383,14 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
     );
     const replayB64 = Buffer.from(replay).toString('base64');
 
-    const expiredCtx = { ...issueCtx, clock: { now: () => new Date(start.getTime() + 16 * 60 * 1000) } };
+    await db
+      .update(attempts)
+      .set({ expiresAt: new Date(start.getTime() + 60_000) })
+      .where(eq(attempts.id, issued.attemptId));
+    const expiredCtx = {
+      ...issueCtx,
+      clock: { now: () => new Date(start.getTime() + 2 * 60 * 1000) },
+    };
     await expect(
       finishAttempt(db, expiredCtx, {
         userId: a.userId,
@@ -353,7 +481,10 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
     expect(claimed[0]?.state).toBe('locked');
     await processNextJob(db, issueCtx.clock, 'worker-3', { staleLockSeconds: 0 });
     await processNextJob(db, issueCtx.clock, 'worker-4', { staleLockSeconds: 0 });
-    const results = await db.select().from(verifiedResults).where(eq(verifiedResults.runId, finished.runId));
+    const results = await db
+      .select()
+      .from(verifiedResults)
+      .where(eq(verifiedResults.runId, finished.runId));
     expect(results).toHaveLength(1);
   });
 
@@ -397,9 +528,9 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
       .where(eq(scoreSubmissions.runId, finished.runId))
       .then((r) => r[0]);
     expect(sub?.reasonCode).toBe('WORKER_FAULT');
-    expect(await db.select().from(verifiedResults).where(eq(verifiedResults.runId, finished.runId))).toHaveLength(
-      0,
-    );
+    expect(
+      await db.select().from(verifiedResults).where(eq(verifiedResults.runId, finished.runId)),
+    ).toHaveLength(0);
   });
 
   it('keeps a worse verified score from replacing a personal best', async () => {
@@ -421,7 +552,10 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
   });
 
   it('keeps daily verified runs off the championship snapshot', async () => {
-    const { season, sg, dailySg } = await createIsolatedSeason(db, `iso-${randomUUID().slice(0, 8)}`);
+    const { season, sg, dailySg } = await createIsolatedSeason(
+      db,
+      `iso-${randomUUID().slice(0, 8)}`,
+    );
     const profile = await upsertProfile(db, `auth-${randomUUID()}`);
     await insertVerifiedBest(db, profile.userId, sg.id, 100n);
     await recomputeSeason(db, c.clock, season.id, { force: true });
@@ -456,7 +590,10 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
   });
 
   it('keeps weekly verified runs off the championship snapshot', async () => {
-    const { season, sg, weeklySg } = await createIsolatedSeason(db, `iso-w-${randomUUID().slice(0, 8)}`);
+    const { season, sg, weeklySg } = await createIsolatedSeason(
+      db,
+      `iso-w-${randomUUID().slice(0, 8)}`,
+    );
     const profile = await upsertProfile(db, `auth-${randomUUID()}`);
     await insertVerifiedBest(db, profile.userId, sg.id, 100n);
     await recomputeSeason(db, c.clock, season.id, { force: true });
@@ -538,24 +675,127 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
     );
   }, 120_000);
 
+  it('rebuilds closed-season rankings beside frozen snapshots for a restore drill', async () => {
+    const { season, sg } = await createIsolatedSeason(db, `restore-${randomUUID().slice(0, 8)}`);
+    const profile = await upsertProfile(db, `restore-${randomUUID()}`);
+    await insertVerifiedBest(db, profile.userId, sg.id, 321n);
+    await insertVerifiedBest(db, profile.userId, sg.id, 123n);
+    await recomputeSeason(db, c.clock, season.id, { force: true });
+    await closeSeason(db, c.clock, season.id);
+    const frozen = await db
+      .select()
+      .from(rankingSnapshots)
+      .where(and(eq(rankingSnapshots.seasonId, season.id), eq(rankingSnapshots.frozen, true)));
+    const frozenBytes = new Map(frozen.map((row) => [row.id, JSON.stringify(row.payload)]));
+    await db.delete(gameBests).where(eq(gameBests.seasonGameId, sg.id));
+
+    const rebuilt = await rebuildSeasonForRestoreDrill(
+      db,
+      { now: () => new Date(c.clock.now().getTime() + 1_000) },
+      season.id,
+    );
+
+    expect(rebuilt).toBe(true);
+    const allSnapshots = await db
+      .select()
+      .from(rankingSnapshots)
+      .where(eq(rankingSnapshots.seasonId, season.id));
+    for (const frozenSnapshot of frozen) {
+      const liveSnapshot = allSnapshots.find(
+        (row) =>
+          !row.frozen &&
+          row.scope === frozenSnapshot.scope &&
+          row.subjectId === frozenSnapshot.subjectId,
+      );
+      expect(liveSnapshot).toBeTruthy();
+      expect(withoutAsOf(liveSnapshot?.payload)).toEqual(withoutAsOf(frozenSnapshot.payload));
+      expect(JSON.stringify(frozenSnapshot.payload)).toBe(frozenBytes.get(frozenSnapshot.id));
+    }
+    const reconstructedBest = await db
+      .select()
+      .from(gameBests)
+      .where(and(eq(gameBests.seasonGameId, sg.id), eq(gameBests.userId, profile.userId)))
+      .then((rows) => rows[0]);
+    expect(reconstructedBest?.score).toBe(321n);
+  });
+
+  it('serves frozen rankings and overlays anonymised handles without changing snapshot bytes', async () => {
+    const { season, sg } = await createIsolatedSeason(
+      db,
+      `frozen-read-${randomUUID().slice(0, 8)}`,
+    );
+    const profile = await upsertProfile(db, `frozen-read-${randomUUID()}`);
+    const handle = `f${randomUUID().slice(0, 8)}`;
+    await claimHandle(db, c.clock, profile.userId, handle);
+    await insertVerifiedBest(db, profile.userId, sg.id, 321n);
+    await recomputeSeason(db, c.clock, season.id, { force: true });
+    await closeSeason(db, c.clock, season.id);
+
+    const frozen = await db
+      .select()
+      .from(rankingSnapshots)
+      .where(and(eq(rankingSnapshots.seasonId, season.id), eq(rankingSnapshots.frozen, true)));
+    const frozenGame = frozen.find((row) => row.scope === 'game');
+    const frozenChampionship = frozen.find((row) => row.scope === 'championship');
+    const frozenBytes = new Map(frozen.map((row) => [row.id, JSON.stringify(row.payload)]));
+    expect(frozenGame).toBeTruthy();
+    expect(frozenChampionship).toBeTruthy();
+
+    const board = await readLeaderboard(db, season.id, sg.id, {
+      viewerUserId: profile.userId,
+    });
+    const standings = await readStandings(db, season.id);
+    expect(board.rows).toEqual((frozenGame?.payload as { rows: unknown[] }).rows);
+    expect(board.viewer).toEqual((frozenGame?.payload as { rows: unknown[] }).rows[0]);
+    expect(standings).toEqual(frozenChampionship?.payload);
+
+    await anonymiseProfile(db, c.clock, profile.userId);
+    const anonymisedBoard = await readLeaderboard(db, season.id, sg.id, {
+      viewerUserId: profile.userId,
+    });
+    const anonymisedStandings = await readStandings(db, season.id);
+    expect(anonymisedBoard.rows[0]).toMatchObject({ rank: 1, score: '321', handle: 'retired' });
+    expect(anonymisedBoard.viewer).toMatchObject({ rank: 1, score: '321', handle: 'retired' });
+    expect(anonymisedStandings.rows[0]).toMatchObject({
+      rank: 1,
+      userId: profile.userId,
+      handle: 'retired',
+    });
+
+    const after = await db
+      .select()
+      .from(rankingSnapshots)
+      .where(and(eq(rankingSnapshots.seasonId, season.id), eq(rankingSnapshots.frozen, true)));
+    expect(new Map(after.map((row) => [row.id, JSON.stringify(row.payload)]))).toEqual(frozenBytes);
+  });
+
   it('rotates the daily board, archives yesterday, and enforces the cap', async () => {
     const day1 = new Date('2026-08-18T12:00:00.000Z');
     await rotateDaily(db, { randomBytes: (n) => randomBytes(n) }, day1);
+
+    const day2 = new Date('2026-08-19T00:30:00.000Z');
+    await rotateDaily(db, { randomBytes: (n) => randomBytes(n) }, day2);
+    const profile = await upsertProfile(db, `auth-${randomUUID()}`);
+    await claimHandle(db, { now: () => day2 }, profile.userId, `c${randomUUID().slice(0, 8)}`);
+    const capCtx = ctx({ clock: { now: () => day2 } });
+    const first = await issueAttempt(db, capCtx, {
+      userId: profile.userId,
+      gameSlug: 'test-chamber',
+      seedPolicy: 'daily-seed',
+      ip: '11.0.0.0',
+    });
     const dailySg = await db
       .select({ id: seasonGames.id })
       .from(seasonGames)
       .innerJoin(games, eq(games.id, seasonGames.gameId))
-      .where(and(eq(games.slug, 'test-chamber'), eq(seasonGames.seedPolicy, 'daily-seed')))
+      .where(
+        and(
+          eq(seasonGames.seasonId, first.seasonId),
+          eq(games.slug, 'test-chamber'),
+          eq(seasonGames.seedPolicy, 'daily-seed'),
+        ),
+      )
       .then((r) => r[0]);
-    const todayBoard = await db
-      .select()
-      .from(dailyBoards)
-      .where(and(eq(dailyBoards.seasonGameId, dailySg!.id), eq(dailyBoards.utcDate, '2026-08-18')))
-      .then((r) => r[0]);
-    expect(todayBoard).toBeTruthy();
-
-    const day2 = new Date('2026-08-19T00:30:00.000Z');
-    await rotateDaily(db, { randomBytes: (n) => randomBytes(n) }, day2);
     const yesterday = await db
       .select()
       .from(dailyBoards)
@@ -568,16 +808,6 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
       .where(and(eq(dailyBoards.seasonGameId, dailySg!.id), eq(dailyBoards.utcDate, '2026-08-19')))
       .then((r) => r[0]);
     expect(nextBoard?.archivedAt).toBeNull();
-
-    const profile = await upsertProfile(db, `auth-${randomUUID()}`);
-    await claimHandle(db, { now: () => day2 }, profile.userId, `c${randomUUID().slice(0, 8)}`);
-    const capCtx = ctx({ clock: { now: () => day2 } });
-    const first = await issueAttempt(db, capCtx, {
-      userId: profile.userId,
-      gameSlug: 'test-chamber',
-      seedPolicy: 'daily-seed',
-      ip: '11.0.0.0',
-    });
     expect(first.seed).toEqual([...unpackSeed(nextBoard!.seed)]);
     for (let i = 1; i < 5; i++) {
       await issueAttempt(db, capCtx, {
@@ -600,11 +830,25 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
   it('rotates weekly boards onto ISO-week Monday and issues that seed', async () => {
     const tuesday = new Date('2026-08-18T12:00:00.000Z');
     await rotateDaily(db, { randomBytes: (n) => randomBytes(n) }, tuesday);
+    const profile = await upsertProfile(db, `auth-${randomUUID()}`);
+    await claimHandle(db, { now: () => tuesday }, profile.userId, `w${randomUUID().slice(0, 8)}`);
+    const issued = await issueAttempt(db, ctx({ clock: { now: () => tuesday } }), {
+      userId: profile.userId,
+      gameSlug: 'test-chamber',
+      seedPolicy: 'weekly-seed',
+      ip: '12.0.0.1',
+    });
     const weeklySg = await db
       .select({ id: seasonGames.id })
       .from(seasonGames)
       .innerJoin(games, eq(games.id, seasonGames.gameId))
-      .where(and(eq(games.slug, 'test-chamber'), eq(seasonGames.seedPolicy, 'weekly-seed')))
+      .where(
+        and(
+          eq(seasonGames.seasonId, issued.seasonId),
+          eq(games.slug, 'test-chamber'),
+          eq(seasonGames.seedPolicy, 'weekly-seed'),
+        ),
+      )
       .then((r) => r[0]);
     expect(weeklySg).toBeTruthy();
     const mondayBoard = await db
@@ -614,15 +858,6 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
       .then((r) => r[0]);
     expect(mondayBoard).toBeTruthy();
     expect(mondayBoard?.archivedAt).toBeNull();
-
-    const profile = await upsertProfile(db, `auth-${randomUUID()}`);
-    await claimHandle(db, { now: () => tuesday }, profile.userId, `w${randomUUID().slice(0, 8)}`);
-    const issued = await issueAttempt(db, ctx({ clock: { now: () => tuesday } }), {
-      userId: profile.userId,
-      gameSlug: 'test-chamber',
-      seedPolicy: 'weekly-seed',
-      ip: '12.0.0.1',
-    });
     expect(issued.seed).toEqual([...unpackSeed(mondayBoard!.seed)]);
   });
 
@@ -760,7 +995,1179 @@ describe.skipIf(!hasDatabaseUrl())('platform integration', () => {
     expect(sub?.verificationStatus).toBe('verified');
     expect(sub?.verifiedScore).toBe(BigInt(golden.score));
   });
+
+  it.each([
+    [
+      'BAD_MAGIC',
+      (valid: Buffer) => {
+        const raw = gunzipSync(valid);
+        raw[0] = 0;
+        return gzipSync(raw);
+      },
+    ],
+    ['TRUNCATED', (valid: Buffer) => gzipSync(gunzipSync(valid).subarray(0, 40))],
+    [
+      'CRC_MISMATCH',
+      (valid: Buffer) => {
+        const raw = gunzipSync(valid);
+        raw[raw.length - 1] = raw[raw.length - 1]! ^ 0xff;
+        return gzipSync(raw);
+      },
+    ],
+    ['TOO_LARGE', () => Buffer.alloc(64 * 1024 + 1)],
+    ['GZIP', () => Buffer.from('not-a-gzip-stream')],
+    [
+      'UNSUPPORTED_FORMAT',
+      (valid: Buffer) => {
+        const raw = gunzipSync(valid);
+        raw.writeUInt16LE(99, 4);
+        return gzipSync(raw);
+      },
+    ],
+    [
+      'TICK_ORDER',
+      async (valid: Buffer) => {
+        const decoded = await decodeReplay(valid);
+        if (!decoded.ok) throw new Error('invalid generated replay');
+        return Buffer.from(
+          await encodeReplay(decoded.header, [
+            { tick: 1, actionId: 2, value: 1 },
+            { tick: 1, actionId: 1, value: 0 },
+          ]),
+        );
+      },
+    ],
+  ] as const)('maps replay decode failure %s through finishAttempt', async (code, corrupt) => {
+    const profile = await upsertProfile(db, `decode-${code}-${randomUUID()}`);
+    await claimHandle(db, c.clock, profile.userId, `d${randomUUID().slice(0, 8)}`);
+    const issueCtx = goldenEntropy();
+    const issued = await issueAttempt(db, issueCtx, {
+      userId: profile.userId,
+      gameSlug: 'test-chamber',
+      seedPolicy: 'fixed-course',
+      ip: `198.51.100.${Math.floor(Math.random() * 200) + 1}`,
+    });
+    const valid = await replayForAttempt(issued.attemptId);
+    const replay = await corrupt(valid);
+    await expect(
+      finishAttempt(db, issueCtx, {
+        userId: profile.userId,
+        attemptId: issued.attemptId,
+        token: issued.token,
+        replayB64: replay.toString('base64'),
+        claimedScore: '302',
+      }),
+    ).rejects.toMatchObject({ code });
+  });
+
+  it('rate-limits one issue identity without sharing its user bucket', async () => {
+    const now = new Date('2026-08-18T20:00:00.000Z');
+    const a = await upsertProfile(db, `limited-${randomUUID()}`);
+    const b = await upsertProfile(db, `unlimited-${randomUUID()}`);
+    await claimHandle(db, { now: () => now }, a.userId, `l${randomUUID().slice(0, 8)}`);
+    await claimHandle(db, { now: () => now }, b.userId, `n${randomUUID().slice(0, 8)}`);
+    const window = floorWindow(now, 60_000);
+    for (let i = 0; i < 10; i++) {
+      await hitRateLimit(db, `issue:user:${a.userId}:m`, window, 10);
+    }
+    const rateCtx = ctx({ clock: { now: () => now } });
+    await expect(
+      issueAttempt(db, rateCtx, {
+        userId: a.userId,
+        gameSlug: 'test-chamber',
+        seedPolicy: 'fixed-course',
+        ip: '203.0.113.90',
+      }),
+    ).rejects.toMatchObject({ code: 'RATE_LIMITED' });
+    await expect(
+      issueAttempt(db, rateCtx, {
+        userId: b.userId,
+        gameSlug: 'test-chamber',
+        seedPolicy: 'fixed-course',
+        ip: '203.0.113.90',
+      }),
+    ).resolves.toMatchObject({ dailyCapRemaining: 4 });
+  });
+
+  it('prefers an invite launch season over ci when both contain the game window', async () => {
+    const now = new Date('2026-08-18T20:30:00.000Z');
+    const suffix = randomUUID().replaceAll('-', '');
+    const ciSeason = await db
+      .select()
+      .from(seasons)
+      .where(eq(seasons.slug, 'ci'))
+      .then((rows) => rows[0]);
+    if (!ciSeason) throw new Error('missing ci season');
+    await db
+      .update(seasons)
+      .set({ status: 'active', entryPolicy: 'open' })
+      .where(eq(seasons.id, ciSeason.id));
+
+    const gameSlug = `launch-preference-${suffix}`;
+    const registryId = 20_000 + (Number.parseInt(suffix.slice(0, 8), 16) % 40_000);
+    await seedGame(
+      db,
+      ciSeason.id,
+      {
+        slug: gameSlug,
+        registryId,
+        maxRunTicks: 600,
+        seedPolicies: ['fixed-course'],
+      },
+      now,
+    );
+    const [launchSeason] = await db
+      .insert(seasons)
+      .values({
+        slug: `internal-0-${suffix}`,
+        startsAt: new Date('2020-01-01T00:00:00.000Z'),
+        endsAt: new Date('2099-01-01T00:00:00.000Z'),
+        status: 'active',
+        rulesVersion: 1,
+        entryPolicy: 'invite',
+      })
+      .returning();
+    if (!launchSeason) throw new Error('failed to create launch season');
+    await seedGame(
+      db,
+      launchSeason.id,
+      {
+        slug: gameSlug,
+        registryId,
+        maxRunTicks: 600,
+        seedPolicies: ['fixed-course'],
+      },
+      now,
+    );
+
+    const invitedEmail = `invited-${suffix}@example.com`;
+    const invited = await upsertProfile(db, `launch-invited-${randomUUID()}`, invitedEmail);
+    await claimHandle(db, { now: () => now }, invited.userId, `l${randomUUID().slice(0, 8)}`);
+    await db.insert(rankedInvites).values({ email: invitedEmail, invitedAt: now });
+    const issueCtx = goldenEntropy();
+    issueCtx.clock = { now: () => now };
+    await expect(
+      issueAttempt(db, issueCtx, {
+        userId: invited.userId,
+        email: invitedEmail,
+        gameSlug,
+        seedPolicy: 'fixed-course',
+        ip: '203.0.113.103',
+      }),
+    ).resolves.toMatchObject({ seasonId: launchSeason.id });
+
+    const uninvitedEmail = `uninvited-${suffix}@example.com`;
+    const uninvited = await upsertProfile(db, `launch-uninvited-${randomUUID()}`, uninvitedEmail);
+    await claimHandle(db, { now: () => now }, uninvited.userId, `n${randomUUID().slice(0, 8)}`);
+    await expect(
+      issueAttempt(db, issueCtx, {
+        userId: uninvited.userId,
+        email: uninvitedEmail,
+        gameSlug,
+        seedPolicy: 'fixed-course',
+        ip: '203.0.113.104',
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_INVITED' });
+  });
+
+  it('requires an invite for invite seasons and lets moderators bypass it', async () => {
+    const now = new Date('2026-08-18T21:00:00.000Z');
+    const suffix = randomUUID().slice(0, 8);
+    const [season] = await db
+      .insert(seasons)
+      .values({
+        slug: `a-invite-${suffix}`,
+        startsAt: new Date('2020-01-01T00:00:00.000Z'),
+        endsAt: new Date('2099-01-01T00:00:00.000Z'),
+        status: 'active',
+        rulesVersion: 1,
+        entryPolicy: 'invite',
+      })
+      .returning();
+    const gameSlug = `invite-game-${suffix}`;
+    await seedGame(
+      db,
+      season!.id,
+      {
+        slug: gameSlug,
+        registryId: 20_000 + (Number.parseInt(suffix.slice(0, 4), 16) % 40_000),
+        maxRunTicks: 600,
+        seedPolicies: ['fixed-course'],
+      },
+      now,
+    );
+
+    const email = `Invite-${suffix}@Example.com`;
+    const player = await upsertProfile(db, `invite-player-${randomUUID()}`, email);
+    await claimHandle(db, { now: () => now }, player.userId, `i${randomUUID().slice(0, 8)}`);
+    const issueCtx = goldenEntropy();
+    issueCtx.clock = { now: () => now };
+    await expect(
+      issueAttempt(db, issueCtx, {
+        userId: player.userId,
+        email,
+        gameSlug,
+        seedPolicy: 'fixed-course',
+        ip: '203.0.113.101',
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_INVITED' });
+
+    await db.insert(rankedInvites).values({ email: email.toLowerCase(), invitedAt: now });
+    await expect(
+      issueAttempt(db, issueCtx, {
+        userId: player.userId,
+        email,
+        gameSlug,
+        seedPolicy: 'fixed-course',
+        ip: '203.0.113.101',
+      }),
+    ).resolves.toBeTruthy();
+    const invite = await db
+      .select()
+      .from(rankedInvites)
+      .where(eq(rankedInvites.email, email))
+      .then((rows) => rows[0]);
+    expect(invite?.consumedUserId).toBe(player.userId);
+    expect(invite?.consumedAt).toEqual(now);
+
+    const moderator = await upsertProfile(db, `invite-moderator-${randomUUID()}`);
+    await db
+      .update(profiles)
+      .set({ role: 'moderator' })
+      .where(eq(profiles.userId, moderator.userId));
+    await claimHandle(db, { now: () => now }, moderator.userId, `m${randomUUID().slice(0, 8)}`);
+    await expect(
+      issueAttempt(db, goldenEntropy(), {
+        userId: moderator.userId,
+        gameSlug,
+        seedPolicy: 'fixed-course',
+        ip: '203.0.113.102',
+      }),
+    ).resolves.toBeTruthy();
+  });
+
+  it('keeps a season closing until issued attempts expire and then freezes it', async () => {
+    const start = new Date('2026-08-18T22:00:00.000Z');
+    const { season, sg } = await createIsolatedSeason(db, `closing-${randomUUID().slice(0, 8)}`);
+    const profile = await upsertProfile(db, `closing-${randomUUID()}`);
+    await db.insert(attempts).values({
+      userId: profile.userId,
+      seasonGameId: sg.id,
+      gameVersionId: sg.gameVersionId,
+      seed: packSeed([1, 2, 3, 4]),
+      nonce: randomBytes(16),
+      issuedAt: start,
+      expiresAt: new Date(start.getTime() + 15 * 60 * 1000),
+      status: 'issued',
+    });
+
+    await closeSeason(db, { now: () => start }, season.id);
+    const closing = await db
+      .select()
+      .from(seasons)
+      .where(eq(seasons.id, season.id))
+      .then((r) => r[0]);
+    expect(closing?.status).toBe('closing');
+    expect(
+      await db
+        .select()
+        .from(rankingSnapshots)
+        .where(and(eq(rankingSnapshots.seasonId, season.id), eq(rankingSnapshots.frozen, true))),
+    ).toHaveLength(0);
+
+    const afterGrace = new Date(start.getTime() + 15 * 60 * 1000 + 1);
+    await closeSeason(db, { now: () => afterGrace }, season.id);
+    const closed = await db
+      .select()
+      .from(seasons)
+      .where(eq(seasons.id, season.id))
+      .then((r) => r[0]);
+    expect(closed?.status).toBe('closed');
+    expect(
+      await db
+        .select()
+        .from(rankingSnapshots)
+        .where(and(eq(rankingSnapshots.seasonId, season.id), eq(rankingSnapshots.frozen, true))),
+    ).not.toHaveLength(0);
+  });
+
+  it('waits for pending submitted verification before freezing its score', async () => {
+    const start = new Date('2026-08-18T22:15:00.000Z');
+    const { season, sg } = await createIsolatedSeason(
+      db,
+      `pending-close-${randomUUID().slice(0, 8)}`,
+    );
+    const profile = await upsertProfile(db, `pending-close-${randomUUID()}`);
+    const attemptId = randomUUID();
+    const runId = randomUUID();
+    await db.insert(attempts).values({
+      id: attemptId,
+      userId: profile.userId,
+      seasonGameId: sg.id,
+      gameVersionId: sg.gameVersionId,
+      seed: packSeed([1, 2, 3, 4]),
+      nonce: randomBytes(16),
+      issuedAt: start,
+      expiresAt: new Date(start.getTime() + 15 * 60 * 1000),
+      status: 'submitted',
+      consumedAt: start,
+    });
+    await db.insert(runs).values({
+      id: runId,
+      attemptId,
+      userId: profile.userId,
+      claimedScore: 987n,
+      totalTicks: 1,
+      replay: Buffer.from([1]),
+      finalStateHash: Buffer.alloc(8),
+    });
+    await db.insert(scoreSubmissions).values({ runId, verificationStatus: 'pending' });
+    await db.insert(verificationJobs).values({ runId, state: 'queued' });
+
+    await closeSeason(db, { now: () => start }, season.id);
+    const closing = await db
+      .select({ status: seasons.status })
+      .from(seasons)
+      .where(eq(seasons.id, season.id))
+      .then((rows) => rows[0]);
+    expect(closing?.status).toBe('closing');
+    expect(
+      await db
+        .select()
+        .from(rankingSnapshots)
+        .where(and(eq(rankingSnapshots.seasonId, season.id), eq(rankingSnapshots.frozen, true))),
+    ).toHaveLength(0);
+
+    const verifiedAt = new Date(start.getTime() + 1_000);
+    await db
+      .update(scoreSubmissions)
+      .set({ verificationStatus: 'verified', verifiedScore: 987n, verifiedAt })
+      .where(eq(scoreSubmissions.runId, runId));
+    await db
+      .update(verificationJobs)
+      .set({ state: 'done' })
+      .where(eq(verificationJobs.runId, runId));
+    const [result] = await db
+      .insert(verifiedResults)
+      .values({
+        userId: profile.userId,
+        seasonGameId: sg.id,
+        runId,
+        score: 987n,
+        achievedAt: verifiedAt,
+      })
+      .returning();
+    await db.insert(gameBests).values({
+      seasonGameId: sg.id,
+      userId: profile.userId,
+      verifiedResultId: result!.id,
+      score: 987n,
+    });
+
+    await closeSeason(db, { now: () => verifiedAt }, season.id);
+    const closed = await db
+      .select({ status: seasons.status })
+      .from(seasons)
+      .where(eq(seasons.id, season.id))
+      .then((rows) => rows[0]);
+    expect(closed?.status).toBe('closed');
+    const frozen = await readStandings(db, season.id);
+    expect(frozen.rows).toContainEqual(
+      expect.objectContaining({
+        userId: profile.userId,
+        games: expect.objectContaining({
+          [sg.id]: expect.objectContaining({ rank: 1 }),
+        }),
+      }),
+    );
+  });
+
+  it('serializes attempt issuance with season closure', async () => {
+    const now = new Date('2026-08-18T22:30:00.000Z');
+    const suffix = randomUUID().replaceAll('-', '');
+    const [season] = await db
+      .insert(seasons)
+      .values({
+        slug: `issue-close-${suffix}`,
+        startsAt: new Date('2020-01-01T00:00:00.000Z'),
+        endsAt: new Date('2099-01-01T00:00:00.000Z'),
+        status: 'active',
+        rulesVersion: 1,
+      })
+      .returning();
+    const gameSlug = `issue-close-game-${suffix}`;
+    await seedGame(
+      db,
+      season!.id,
+      {
+        slug: gameSlug,
+        registryId: 20_000 + (Number.parseInt(suffix.slice(0, 8), 16) % 40_000),
+        maxRunTicks: 600,
+        seedPolicies: ['fixed-course'],
+      },
+      now,
+    );
+    const sg = await db
+      .select({ id: seasonGames.id })
+      .from(seasonGames)
+      .innerJoin(games, eq(games.id, seasonGames.gameId))
+      .where(eq(games.slug, gameSlug))
+      .then((rows) => rows[0]);
+    const profile = await upsertProfile(db, `issue-close-${randomUUID()}`);
+    await claimHandle(db, { now: () => now }, profile.userId, `x${randomUUID().slice(0, 8)}`);
+    const functionName = `delay_attempt_insert_${suffix}`;
+    const triggerName = `delay_attempt_insert_trigger_${suffix}`;
+    await pool.query(`
+      CREATE FUNCTION ${functionName}() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN
+        PERFORM pg_sleep(1);
+        RETURN NEW;
+      END
+      $$;
+      CREATE TRIGGER ${triggerName}
+      BEFORE INSERT ON attempts
+      FOR EACH ROW
+      WHEN (NEW.season_game_id = '${sg!.id}')
+      EXECUTE FUNCTION ${functionName}();
+    `);
+
+    try {
+      const issueCtx = goldenEntropy();
+      issueCtx.clock = { now: () => now };
+      const issuing = issueAttempt(db, issueCtx, {
+        userId: profile.userId,
+        gameSlug,
+        seedPolicy: 'fixed-course',
+        ip: '203.0.113.111',
+      });
+      await waitForSleepingAttemptInsert(pool);
+      const closing = closeSeason(db, { now: () => now }, season!.id);
+      await Promise.all([issuing, closing]);
+
+      const closedSeason = await db
+        .select({ status: seasons.status })
+        .from(seasons)
+        .where(eq(seasons.id, season!.id))
+        .then((rows) => rows[0]);
+      const inFlight = await db
+        .select({ id: attempts.id })
+        .from(attempts)
+        .where(and(eq(attempts.seasonGameId, sg!.id), eq(attempts.status, 'issued')));
+      expect(closedSeason?.status).toBe('closing');
+      expect(inFlight).toHaveLength(1);
+    } finally {
+      await pool.query(`DROP TRIGGER IF EXISTS ${triggerName} ON attempts`);
+      await pool.query(`DROP FUNCTION IF EXISTS ${functionName}()`);
+    }
+  });
+
+  it('serializes attempt finishing with season closure', async () => {
+    const now = new Date('2026-08-18T22:45:00.000Z');
+    const suffix = randomUUID().replaceAll('-', '');
+    const [season] = await db
+      .insert(seasons)
+      .values({
+        slug: `finish-close-${suffix}`,
+        startsAt: new Date('2020-01-01T00:00:00.000Z'),
+        endsAt: new Date('2099-01-01T00:00:00.000Z'),
+        status: 'active',
+        rulesVersion: 1,
+      })
+      .returning();
+    const gameSlug = `finish-close-game-${suffix}`;
+    const registryId = 20_000 + (Number.parseInt(suffix.slice(0, 8), 16) % 40_000);
+    await seedGame(
+      db,
+      season!.id,
+      {
+        slug: gameSlug,
+        registryId,
+        maxRunTicks: 600,
+        seedPolicies: ['fixed-course'],
+      },
+      now,
+    );
+    const profile = await upsertProfile(db, `finish-close-${randomUUID()}`);
+    await claimHandle(db, { now: () => now }, profile.userId, `f${randomUUID().slice(0, 8)}`);
+    const finishCtx = goldenEntropy();
+    finishCtx.clock = { now: () => now };
+    const issued = await issueAttempt(db, finishCtx, {
+      userId: profile.userId,
+      gameSlug,
+      seedPolicy: 'fixed-course',
+      ip: '203.0.113.112',
+    });
+    const decoded = await decodeReplay(SAMPLE);
+    if (!decoded.ok) throw new Error('invalid sample fixture');
+    const replay = await encodeReplay(
+      {
+        ...decoded.header,
+        attemptId: uuidToBytes(issued.attemptId),
+        gameRegistryId: registryId,
+      },
+      decoded.events,
+    );
+    const functionName = `delay_attempt_finish_${suffix}`;
+    const triggerName = `delay_attempt_finish_trigger_${suffix}`;
+    await pool.query(`
+      CREATE FUNCTION ${functionName}() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN
+        PERFORM pg_sleep(1);
+        RETURN NEW;
+      END
+      $$;
+      CREATE TRIGGER ${triggerName}
+      BEFORE UPDATE OF status ON attempts
+      FOR EACH ROW
+      WHEN (
+        OLD.id = '${issued.attemptId}'
+        AND OLD.status = 'issued'
+        AND NEW.status = 'submitted'
+      )
+      EXECUTE FUNCTION ${functionName}();
+    `);
+
+    try {
+      const finishing = finishAttempt(db, finishCtx, {
+        userId: profile.userId,
+        attemptId: issued.attemptId,
+        token: issued.token,
+        replayB64: Buffer.from(replay).toString('base64'),
+        claimedScore: '302',
+      });
+      await waitForSleepingAttemptUpdate(pool);
+      const closing = closeSeason(db, { now: () => now }, season!.id);
+      const [finishResult] = await Promise.allSettled([finishing, closing]);
+
+      const finalSeason = await db
+        .select({ status: seasons.status })
+        .from(seasons)
+        .where(eq(seasons.id, season!.id))
+        .then((rows) => rows[0]);
+      const finalAttempt = await db
+        .select({ status: attempts.status })
+        .from(attempts)
+        .where(eq(attempts.id, issued.attemptId))
+        .then((rows) => rows[0]);
+
+      if (finishResult.status === 'fulfilled') {
+        expect(finalAttempt?.status).toBe('submitted');
+      } else {
+        expect(finishResult.reason).toMatchObject({ code: 'SEASON_INACTIVE' });
+        expect(finalAttempt?.status).not.toBe('submitted');
+      }
+      expect(finalSeason?.status).toBe('closing');
+      expect(
+        await db
+          .select()
+          .from(rankingSnapshots)
+          .where(and(eq(rankingSnapshots.seasonId, season!.id), eq(rankingSnapshots.frozen, true))),
+      ).toHaveLength(0);
+    } finally {
+      await pool.query(`DROP TRIGGER IF EXISTS ${triggerName} ON attempts`);
+      await pool.query(`DROP FUNCTION IF EXISTS ${functionName}()`);
+    }
+  });
+
+  it.each(['closing', 'closed'] as const)(
+    'rejects finish when its season is %s',
+    async (seasonStatus) => {
+      const profile = await upsertProfile(db, `season-finish-${randomUUID()}`);
+      await claimHandle(db, c.clock, profile.userId, `q${randomUUID().slice(0, 8)}`);
+      const issueCtx = goldenEntropy();
+      const issued = await issueAttempt(db, issueCtx, {
+        userId: profile.userId,
+        gameSlug: 'test-chamber',
+        seedPolicy: 'fixed-course',
+        ip: '203.0.113.110',
+      });
+      const season = await db
+        .select()
+        .from(seasons)
+        .where(eq(seasons.id, issued.seasonId))
+        .then((r) => r[0]);
+      await db.update(seasons).set({ status: seasonStatus }).where(eq(seasons.id, season!.id));
+      try {
+        await expect(
+          finishAttempt(db, issueCtx, {
+            userId: profile.userId,
+            attemptId: issued.attemptId,
+            token: issued.token,
+            replayB64: (await replayForAttempt(issued.attemptId)).toString('base64'),
+            claimedScore: '302',
+          }),
+        ).rejects.toMatchObject({ code: 'SEASON_INACTIVE' });
+      } finally {
+        await db.update(seasons).set({ status: 'active' }).where(eq(seasons.id, season!.id));
+      }
+    },
+  );
+
+  it('files hashed guest reports and records every moderator action and notice', async () => {
+    const now = new Date('2026-08-18T23:00:00.000Z');
+    const target = await upsertProfile(
+      db,
+      `report-target-${randomUUID()}`,
+      `target-${randomUUID()}@example.com`,
+    );
+    const reporter = await upsertProfile(db, `reporter-${randomUUID()}`);
+    const moderator = await upsertProfile(db, `moderator-${randomUUID()}`);
+    const targetHandle = `r${randomUUID().slice(0, 8)}`;
+    await claimHandle(db, { now: () => now }, target.userId, targetHandle);
+    await db
+      .update(profiles)
+      .set({ role: 'moderator' })
+      .where(eq(profiles.userId, moderator.userId));
+    const reportCtx = ctx({ clock: { now: () => now } });
+    const ip = '198.51.100.200';
+
+    const reports = [];
+    for (const action of ['suspend', 'force_release_handle', 'unsuspend', 'dismiss'] as const) {
+      reports.push(
+        await fileReport(db, reportCtx, {
+          reporterUserId: reporter.userId,
+          ip,
+          targetUserId: target.userId,
+          reasonCode: 'handle_offensive',
+          details: action,
+        }),
+      );
+    }
+    const stored = await db
+      .select()
+      .from(ugcReports)
+      .where(eq(ugcReports.id, reports[0]!.id))
+      .then((r) => r[0]);
+    expect(stored?.reporterIpHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(stored?.reporterIpHash).not.toContain(ip);
+    await expect(listModerationReports(db, reporter.userId, 'open')).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      status: 404,
+    });
+    expect(await listModerationReports(db, moderator.userId, 'open')).toHaveLength(4);
+
+    for (let i = 0; i < reports.length; i++) {
+      const action = (['suspend', 'force_release_handle', 'unsuspend', 'dismiss'] as const)[i]!;
+      await moderateReport(
+        db,
+        { now: () => new Date(now.getTime() + i + 1) },
+        {
+          actorUserId: moderator.userId,
+          reportId: reports[i]!.id,
+          action,
+          reasonCode: `rule_${i}`,
+          reasonText: `Reason ${i}`,
+        },
+      );
+    }
+    const targetAfter = await db
+      .select()
+      .from(profiles)
+      .where(eq(profiles.userId, target.userId))
+      .then((r) => r[0]);
+    expect(targetAfter?.status).toBe('active');
+    expect(targetAfter?.handle).toBeNull();
+    const notices = await listUserNotices(db, target.userId);
+    expect(notices).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          reasonCode: 'rule_0',
+          reasonText: 'Reason 0',
+          redress: expect.stringContaining('/legal'),
+        }),
+      ]),
+    );
+    expect(
+      await db
+        .select()
+        .from(moderationActions)
+        .where(eq(moderationActions.actorUserId, moderator.userId)),
+    ).toHaveLength(4);
+    expect(
+      await db.select().from(auditEvents).where(eq(auditEvents.actor, moderator.userId)),
+    ).toEqual(expect.arrayContaining([expect.objectContaining({ action: 'moderation.suspend' })]));
+  });
+
+  it('allows only one moderator to action an open report', async () => {
+    const now = new Date('2026-08-18T23:30:00.000Z');
+    const target = await upsertProfile(db, `concurrent-report-target-${randomUUID()}`);
+    const moderator = await upsertProfile(db, `concurrent-moderator-${randomUUID()}`);
+    await db
+      .update(profiles)
+      .set({ role: 'moderator' })
+      .where(eq(profiles.userId, moderator.userId));
+    const report = await fileReport(db, ctx({ clock: { now: () => now } }), {
+      ip: '198.51.100.201',
+      targetUserId: target.userId,
+      reasonCode: 'other',
+      details: 'concurrent action',
+    });
+    const actionInput = {
+      actorUserId: moderator.userId,
+      reportId: report.id,
+      action: 'suspend' as const,
+      reasonCode: 'concurrent',
+      reasonText: 'Only one action is allowed',
+    };
+
+    const results = await Promise.allSettled([
+      moderateReport(db, { now: () => now }, actionInput),
+      moderateReport(db, { now: () => now }, actionInput),
+    ]);
+
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((result) => result.status === 'rejected')).toEqual([
+      expect.objectContaining({
+        reason: expect.objectContaining({ code: 'ATTEMPT_NOT_FOUND' }),
+      }),
+    ]);
+    expect(
+      await db.select().from(moderationActions).where(eq(moderationActions.reportId, report.id)),
+    ).toHaveLength(1);
+  });
+
+  it('rolls back a report when its audit insert fails', async () => {
+    const target = await upsertProfile(db, `report-atomic-target-${randomUUID()}`);
+    const details = `audit failure ${randomUUID()}`;
+    const suffix = randomUUID().replaceAll('-', '');
+    const functionName = `fail_report_audit_${suffix}`;
+    const triggerName = `fail_report_audit_trigger_${suffix}`;
+    await pool.query(`
+      CREATE FUNCTION ${functionName}() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN
+        RAISE EXCEPTION 'forced report audit failure';
+      END
+      $$;
+      CREATE TRIGGER ${triggerName}
+      BEFORE INSERT ON audit_events
+      FOR EACH ROW
+      WHEN (
+        NEW.action = 'ugc.report'
+        AND NEW.request_meta->>'targetUserId' = '${target.userId}'
+      )
+      EXECUTE FUNCTION ${functionName}();
+    `);
+
+    try {
+      await expect(
+        fileReport(db, c, {
+          ip: '198.51.100.202',
+          targetUserId: target.userId,
+          reasonCode: 'other',
+          details,
+        }),
+      ).rejects.toThrow();
+      expect(
+        await db
+          .select()
+          .from(ugcReports)
+          .where(and(eq(ugcReports.targetUserId, target.userId), eq(ugcReports.details, details))),
+      ).toHaveLength(0);
+    } finally {
+      await pool.query(`DROP TRIGGER IF EXISTS ${triggerName} ON audit_events`);
+      await pool.query(`DROP FUNCTION IF EXISTS ${functionName}()`);
+    }
+  });
+
+  it('rate-limits reports by hashed IP without sharing another IP bucket', async () => {
+    const target = await upsertProfile(db, `report-rate-target-${randomUUID()}`);
+    const reportCtx = ctx({ clock: { now: () => new Date('2026-08-19T00:00:00.000Z') } });
+    for (let i = 0; i < 5; i++) {
+      await fileReport(db, reportCtx, {
+        ip: '198.51.100.210',
+        targetUserId: target.userId,
+        reasonCode: 'other',
+        details: String(i),
+      });
+    }
+    await expect(
+      fileReport(db, reportCtx, {
+        ip: '198.51.100.210',
+        targetUserId: target.userId,
+        reasonCode: 'other',
+        details: 'limited',
+      }),
+    ).rejects.toMatchObject({ code: 'UGC_REPORT_RATE' });
+    await expect(
+      fileReport(db, reportCtx, {
+        ip: '198.51.100.211',
+        targetUserId: target.userId,
+        reasonCode: 'other',
+        details: 'separate',
+      }),
+    ).resolves.toBeTruthy();
+  });
+
+  it('actions an old force-release report without changing an anonymised profile', async () => {
+    const now = new Date('2026-08-19T00:30:00.000Z');
+    const target = await upsertProfile(db, `anonymised-report-target-${randomUUID()}`);
+    const moderator = await upsertProfile(db, `anonymised-report-moderator-${randomUUID()}`);
+    await db
+      .update(profiles)
+      .set({ role: 'moderator' })
+      .where(eq(profiles.userId, moderator.userId));
+    await claimHandle(db, { now: () => now }, target.userId, `o${randomUUID().slice(0, 8)}`);
+    const report = await fileReport(db, ctx({ clock: { now: () => now } }), {
+      ip: '198.51.100.230',
+      targetUserId: target.userId,
+      reasonCode: 'handle_offensive',
+      details: 'action after deletion',
+    });
+    await anonymiseProfile(db, { now: () => new Date(now.getTime() + 1) }, target.userId);
+
+    await expect(
+      moderateReport(
+        db,
+        { now: () => new Date(now.getTime() + 2) },
+        {
+          actorUserId: moderator.userId,
+          reportId: report.id,
+          action: 'force_release_handle',
+          reasonCode: 'offensive',
+          reasonText: 'Release the reported handle',
+        },
+      ),
+    ).resolves.toMatchObject({ status: 'actioned' });
+
+    const targetAfter = await db
+      .select()
+      .from(profiles)
+      .where(eq(profiles.userId, target.userId))
+      .then((rows) => rows[0]);
+    expect(targetAfter).toMatchObject({
+      status: 'anonymised',
+      handle: expect.stringMatching(/^d-[0-9a-f]{12,13}$/),
+    });
+    expect(
+      await db.select().from(moderationActions).where(eq(moderationActions.reportId, report.id)),
+    ).toHaveLength(1);
+    expect(
+      await db
+        .select()
+        .from(auditEvents)
+        .where(
+          and(
+            eq(auditEvents.action, 'moderation.force_release_handle'),
+            eq(auditEvents.target, target.userId),
+          ),
+        ),
+    ).toHaveLength(1);
+  });
+
+  it('removes a force-released handle from live rankings and dirties its season', async () => {
+    const recomputedAt = new Date('2026-08-19T01:00:00.000Z');
+    const releasedAt = new Date(recomputedAt.getTime() + 31_000);
+    const { season, sg } = await createIsolatedSeason(
+      db,
+      `live-release-${randomUUID().slice(0, 8)}`,
+    );
+    const target = await upsertProfile(db, `live-release-target-${randomUUID()}`);
+    const moderator = await upsertProfile(db, `live-release-moderator-${randomUUID()}`);
+    await db
+      .update(profiles)
+      .set({ role: 'moderator' })
+      .where(eq(profiles.userId, moderator.userId));
+    const offensiveHandle = `x${randomUUID().slice(0, 8)}`;
+    await claimHandle(db, { now: () => recomputedAt }, target.userId, offensiveHandle);
+    await insertVerifiedBest(db, target.userId, sg.id, 444n);
+    await recomputeSeason(db, { now: () => recomputedAt }, season.id, { force: true });
+    const report = await fileReport(db, ctx({ clock: { now: () => releasedAt } }), {
+      ip: '198.51.100.231',
+      targetUserId: target.userId,
+      reasonCode: 'handle_offensive',
+      details: 'remove from live boards',
+    });
+
+    await moderateReport(
+      db,
+      { now: () => releasedAt },
+      {
+        actorUserId: moderator.userId,
+        reportId: report.id,
+        action: 'force_release_handle',
+        reasonCode: 'offensive',
+        reasonText: 'Release the reported handle',
+      },
+    );
+
+    const dirty = await db
+      .select()
+      .from(rankingDirty)
+      .where(eq(rankingDirty.seasonId, season.id))
+      .then((rows) => rows[0]);
+    expect(dirty?.dirtyAt).toEqual(releasedAt);
+    const board = await readLeaderboard(db, season.id, sg.id, {
+      viewerUserId: target.userId,
+    });
+    const standings = await readStandings(db, season.id);
+    expect(board.rows.find((row) => row.userId === target.userId)?.handle).toBeNull();
+    expect(board.viewer?.handle).toBeNull();
+    expect(standings.rows.find((row) => row.userId === target.userId)?.handle).toBeNull();
+    expect(JSON.stringify({ board, standings })).not.toContain(offensiveHandle);
+
+    await expect(recomputeSeason(db, { now: () => releasedAt }, season.id)).resolves.toBe(true);
+    const liveSnapshots = await db
+      .select()
+      .from(rankingSnapshots)
+      .where(and(eq(rankingSnapshots.seasonId, season.id), eq(rankingSnapshots.frozen, false)));
+    const targetSnapshotRows = liveSnapshots
+      .flatMap(
+        (snapshot) =>
+          (snapshot.payload as { rows: Array<{ userId: string; handle: string | null }> }).rows,
+      )
+      .filter((row) => row.userId === target.userId);
+    expect(targetSnapshotRows).toHaveLength(2);
+    expect(targetSnapshotRows.every((row) => row.handle === null)).toBe(true);
+  });
+
+  it('overlays a force-released handle on frozen rankings without changing snapshot bytes', async () => {
+    const frozenAt = new Date('2026-08-19T02:00:00.000Z');
+    const { season, sg } = await createIsolatedSeason(
+      db,
+      `frozen-release-${randomUUID().slice(0, 8)}`,
+    );
+    const target = await upsertProfile(db, `frozen-release-target-${randomUUID()}`);
+    const moderator = await upsertProfile(db, `frozen-release-moderator-${randomUUID()}`);
+    await db
+      .update(profiles)
+      .set({ role: 'moderator' })
+      .where(eq(profiles.userId, moderator.userId));
+    const offensiveHandle = `y${randomUUID().slice(0, 8)}`;
+    await claimHandle(db, { now: () => frozenAt }, target.userId, offensiveHandle);
+    await insertVerifiedBest(db, target.userId, sg.id, 555n);
+    const report = await fileReport(db, ctx({ clock: { now: () => frozenAt } }), {
+      ip: '198.51.100.232',
+      targetUserId: target.userId,
+      reasonCode: 'handle_offensive',
+      details: 'remove from frozen boards',
+    });
+    await recomputeSeason(db, { now: () => frozenAt }, season.id, { force: true });
+    await closeSeason(db, { now: () => frozenAt }, season.id);
+    const frozenBefore = await db
+      .select()
+      .from(rankingSnapshots)
+      .where(and(eq(rankingSnapshots.seasonId, season.id), eq(rankingSnapshots.frozen, true)));
+    const frozenBytes = new Map(
+      frozenBefore.map((snapshot) => [snapshot.id, JSON.stringify(snapshot.payload)]),
+    );
+
+    await moderateReport(
+      db,
+      { now: () => new Date(frozenAt.getTime() + 1) },
+      {
+        actorUserId: moderator.userId,
+        reportId: report.id,
+        action: 'force_release_handle',
+        reasonCode: 'offensive',
+        reasonText: 'Release the reported handle',
+      },
+    );
+
+    const board = await readLeaderboard(db, season.id, sg.id, {
+      viewerUserId: target.userId,
+    });
+    const standings = await readStandings(db, season.id);
+    expect(board.rows.find((row) => row.userId === target.userId)?.handle).toBeNull();
+    expect(board.viewer?.handle).toBeNull();
+    expect(standings.rows.find((row) => row.userId === target.userId)?.handle).toBeNull();
+    expect(JSON.stringify({ board, standings })).not.toContain(offensiveHandle);
+    const frozenAfter = await db
+      .select()
+      .from(rankingSnapshots)
+      .where(and(eq(rankingSnapshots.seasonId, season.id), eq(rankingSnapshots.frozen, true)));
+    expect(frozenAfter).toHaveLength(frozenBefore.length);
+    for (const snapshot of frozenAfter) {
+      expect(JSON.stringify(snapshot.payload)).toBe(frozenBytes.get(snapshot.id));
+    }
+  });
+
+  it('exports caller data, anonymises it, and rebuilds standings as retired', async () => {
+    const authUserId = `privacy-${randomUUID()}`;
+    const email = `privacy-${randomUUID()}@example.com`;
+    const profile = await upsertProfile(db, authUserId);
+    const profileWithEmail = await upsertProfile(db, authUserId, email);
+    expect(profileWithEmail).toMatchObject({ userId: profile.userId, email });
+    const handle = `p${randomUUID().slice(0, 8)}`;
+    await claimHandle(db, c.clock, profile.userId, handle);
+    const season = await db
+      .select()
+      .from(seasons)
+      .where(eq(seasons.slug, 'ci'))
+      .then((r) => r[0]);
+    const sg = await db
+      .select({ id: seasonGames.id })
+      .from(seasonGames)
+      .innerJoin(games, eq(games.id, seasonGames.gameId))
+      .where(and(eq(games.slug, 'test-chamber'), eq(seasonGames.seedPolicy, 'fixed-course')))
+      .then((r) => r[0]);
+    await insertVerifiedBest(db, profile.userId, sg!.id, 777n);
+    const otherEmail = `privacy-other-${randomUUID()}@example.com`;
+    const other = await upsertProfile(db, `privacy-other-${randomUUID()}`, otherEmail);
+    const otherHandle = `q${randomUUID().slice(0, 8)}`;
+    await claimHandle(db, c.clock, other.userId, otherHandle);
+    await fileReport(db, c, {
+      reporterUserId: profile.userId,
+      ip: '198.51.100.220',
+      targetUserId: other.userId,
+      reasonCode: 'other',
+      details: 'export me',
+    });
+
+    const exported = await exportUserData(db, profile.userId);
+    expect(exported.profile.email).toBe(email);
+    expect(exported.attempts).not.toHaveLength(0);
+    expect(exported.runs[0]?.replay).toBe(Buffer.from([1]).toString('base64'));
+    expect(exported.verifiedResults[0]?.score).toBe('777');
+    expect(exported.reportsFiled).toHaveLength(1);
+    expect(exported.auditEvents).not.toHaveLength(0);
+    expect(exported.reportsFiled[0]).not.toHaveProperty('reporterIpHash');
+    const serializedExport = JSON.stringify(exported);
+    expect(serializedExport).not.toContain(other.userId);
+    expect(serializedExport).not.toContain(otherEmail);
+    expect(serializedExport).not.toContain(otherHandle);
+
+    await anonymiseProfile(db, c.clock, profile.userId);
+    const anonymised = await db
+      .select()
+      .from(profiles)
+      .where(eq(profiles.userId, profile.userId))
+      .then((r) => r[0]);
+    expect(anonymised).toMatchObject({
+      status: 'anonymised',
+      email: null,
+      authUserId: `deleted:${profile.userId}`,
+    });
+    expect(anonymised?.handle).toMatch(/^d-[0-9a-f]{12,13}$/);
+    await expect(anonymiseProfile(db, c.clock, profile.userId)).rejects.toMatchObject({
+      code: 'ALREADY_ANONYMISED',
+    });
+
+    await recomputeSeason(db, c.clock, season!.id, { force: true });
+    const board = await readLeaderboard(db, season!.id, sg!.id, { viewerUserId: profile.userId });
+    expect(board.viewer?.handle).toBe('retired');
+    const standings = await readStandings(db, season!.id);
+    expect(standings.rows.find((row) => row.userId === profile.userId)?.handle).toBe('retired');
+    const replacement = await upsertProfile(db, authUserId, `new-${email}`);
+    expect(replacement.userId).not.toBe(profile.userId);
+    expect(replacement.handle).toBeNull();
+  });
+
+  it('rolls back profile and dirty state when anonymisation audit fails', async () => {
+    const { season, sg } = await createIsolatedSeason(
+      db,
+      `privacy-atomic-${randomUUID().slice(0, 8)}`,
+    );
+    const authUserId = `privacy-atomic-${randomUUID()}`;
+    const profile = await upsertProfile(db, authUserId, `${authUserId}@example.com`);
+    const handle = `a${randomUUID().slice(0, 8)}`;
+    await claimHandle(db, c.clock, profile.userId, handle);
+    await insertVerifiedBest(db, profile.userId, sg.id, 100n);
+    const suffix = randomUUID().replaceAll('-', '');
+    const functionName = `fail_anonymise_audit_${suffix}`;
+    const triggerName = `fail_anonymise_audit_trigger_${suffix}`;
+    await pool.query(`
+      CREATE FUNCTION ${functionName}() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN
+        RAISE EXCEPTION 'forced anonymisation audit failure';
+      END
+      $$;
+      CREATE TRIGGER ${triggerName}
+      BEFORE INSERT ON audit_events
+      FOR EACH ROW
+      WHEN (NEW.action = 'profile.anonymise' AND NEW.target = '${profile.userId}')
+      EXECUTE FUNCTION ${functionName}();
+    `);
+
+    try {
+      await expect(anonymiseProfile(db, c.clock, profile.userId)).rejects.toThrow();
+      const after = await db
+        .select()
+        .from(profiles)
+        .where(eq(profiles.userId, profile.userId))
+        .then((rows) => rows[0]);
+      expect(after).toMatchObject({
+        status: 'active',
+        handle,
+        authUserId,
+      });
+      expect(
+        await db.select().from(rankingDirty).where(eq(rankingDirty.seasonId, season.id)),
+      ).toHaveLength(0);
+      expect(
+        await db
+          .select()
+          .from(auditEvents)
+          .where(
+            and(
+              eq(auditEvents.action, 'profile.anonymise'),
+              eq(auditEvents.target, profile.userId),
+            ),
+          ),
+      ).toHaveLength(0);
+    } finally {
+      await pool.query(`DROP TRIGGER IF EXISTS ${triggerName} ON audit_events`);
+      await pool.query(`DROP FUNCTION IF EXISTS ${functionName}()`);
+    }
+  });
+
+  it('retries anonymisation when the deterministic handle is already occupied', async () => {
+    const victim = await upsertProfile(db, `privacy-collision-victim-${randomUUID()}`);
+    const occupant = await upsertProfile(db, `privacy-collision-occupant-${randomUUID()}`);
+    const prefix = createHash('sha256').update(victim.userId).digest('hex').slice(0, 12);
+    const occupiedHandle = `d-${prefix}`;
+    await db
+      .update(profiles)
+      .set({ handle: occupiedHandle })
+      .where(eq(profiles.userId, occupant.userId));
+
+    const anonymised = await anonymiseProfile(db, c.clock, victim.userId);
+
+    expect(anonymised).toMatchObject({
+      userId: victim.userId,
+      status: 'anonymised',
+      handle: `${occupiedHandle}0`,
+    });
+    expect(anonymised.handle).toMatch(/^d-[0-9a-f]{12,13}$/);
+  });
 });
+
+async function waitForSleepingAttemptInsert(pool: pg.Pool): Promise<void> {
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    const result = await pool.query<{ found: boolean }>(`
+      SELECT EXISTS (
+        SELECT 1
+        FROM pg_stat_activity
+        WHERE datname = current_database()
+          AND state = 'active'
+          AND wait_event = 'PgSleep'
+          AND query ILIKE '%insert into "attempts"%'
+      ) AS found
+    `);
+    if (result.rows[0]?.found) return;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  throw new Error('timed out waiting for delayed attempt insert');
+}
+
+async function waitForSleepingAttemptUpdate(pool: pg.Pool): Promise<void> {
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    const result = await pool.query<{ found: boolean }>(`
+      SELECT EXISTS (
+        SELECT 1
+        FROM pg_stat_activity
+        WHERE datname = current_database()
+          AND state = 'active'
+          AND wait_event = 'PgSleep'
+          AND query ILIKE '%update "attempts"%'
+      ) AS found
+    `);
+    if (result.rows[0]?.found) return;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  throw new Error('timed out waiting for delayed attempt update');
+}
 
 async function loadOrderedThenRebuild(
   db: Database,
@@ -794,7 +2201,11 @@ async function createIsolatedSeason(
       rulesVersion: 1,
     })
     .returning();
-  const game = await db.select().from(games).where(eq(games.slug, 'test-chamber')).then((r) => r[0]);
+  const game = await db
+    .select()
+    .from(games)
+    .where(eq(games.slug, 'test-chamber'))
+    .then((r) => r[0]);
   const version = await db
     .select()
     .from(gameVersions)
@@ -842,7 +2253,11 @@ async function insertVerifiedBest(
   seasonGameId: string,
   score: bigint,
 ): Promise<void> {
-  const sg = await db.select().from(seasonGames).where(eq(seasonGames.id, seasonGameId)).then((r) => r[0]);
+  const sg = await db
+    .select()
+    .from(seasonGames)
+    .where(eq(seasonGames.id, seasonGameId))
+    .then((r) => r[0]);
   const attemptId = randomUUID();
   const runId = randomUUID();
   const { attempts } = await import('@stickworld/db');

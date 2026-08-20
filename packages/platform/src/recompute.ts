@@ -1,16 +1,25 @@
 import {
+  attempts,
   gameBests,
   profiles,
   rankingDirty,
   rankingSnapshots,
+  runs,
+  scoreSubmissions,
   seasonGames,
   seasons,
+  verificationJobs,
   verifiedResults,
   type Database,
 } from '@stickworld/db';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, or, sql } from 'drizzle-orm';
 import type { Clock } from './context.js';
-import { RANKING_DIRTY_FLOOR_MS, LEADERBOARD_PAGE_DEFAULT, LEADERBOARD_PAGE_MAX } from './limits.js';
+import {
+  ATTEMPT_TTL_SECONDS,
+  RANKING_DIRTY_FLOOR_MS,
+  LEADERBOARD_PAGE_DEFAULT,
+  LEADERBOARD_PAGE_MAX,
+} from './limits.js';
 import {
   championshipPoints,
   compareChampionship,
@@ -52,7 +61,9 @@ export interface ChampionshipPayload {
   rows: ChampionshipRow[];
 }
 
-async function markDirty(db: Database, seasonId: string, at: Date): Promise<void> {
+type RankingDatabase = Pick<Database, 'select' | 'insert' | 'update'>;
+
+async function markDirty(db: RankingDatabase, seasonId: string, at: Date): Promise<void> {
   await db
     .insert(rankingDirty)
     .values({ seasonId, dirtyAt: at })
@@ -67,13 +78,14 @@ export async function markSeasonDirty(db: Database, seasonId: string, at: Date):
 }
 
 async function loadOrderedBests(
-  db: Database,
+  db: RankingDatabase,
   seasonGameId: string,
 ): Promise<LeaderboardRow[]> {
   const rows = await db
     .select({
       userId: gameBests.userId,
       handle: profiles.handle,
+      profileStatus: profiles.status,
       score: gameBests.score,
       achievedAt: verifiedResults.achievedAt,
     })
@@ -81,7 +93,11 @@ async function loadOrderedBests(
     .innerJoin(verifiedResults, eq(verifiedResults.id, gameBests.verifiedResultId))
     .innerJoin(profiles, eq(profiles.userId, gameBests.userId))
     .where(eq(gameBests.seasonGameId, seasonGameId))
-    .orderBy(sql`${gameBests.score} DESC`, sql`${verifiedResults.achievedAt} ASC`, sql`${gameBests.userId} ASC`);
+    .orderBy(
+      sql`${gameBests.score} DESC`,
+      sql`${verifiedResults.achievedAt} ASC`,
+      sql`${gameBests.userId} ASC`,
+    );
 
   const ranks = rankDense((i, j) => {
     const a = rows[i]!;
@@ -92,14 +108,14 @@ async function loadOrderedBests(
   return rows.map((row, i) => ({
     rank: ranks[i]!,
     userId: row.userId,
-    handle: row.handle,
+    handle: row.profileStatus === 'anonymised' ? 'retired' : row.handle,
     score: row.score.toString(),
     achievedAt: row.achievedAt.toISOString(),
   }));
 }
 
 async function writeLiveSnapshot(
-  db: Database,
+  db: RankingDatabase,
   seasonId: string,
   scope: 'game' | 'championship' | 'daily',
   subjectId: string,
@@ -150,23 +166,24 @@ function standingsFingerprint(payload: ChampionshipPayload): string {
       games: Object.fromEntries(
         Object.entries(row.games)
           .sort(([a], [b]) => a.localeCompare(b))
-          .map(([id, g]) => [
-            id,
-            { points: g.points, rank: g.rank, provisional: g.provisional },
-          ]),
+          .map(([id, g]) => [id, { points: g.points, rank: g.rank, provisional: g.provisional }]),
       ),
     })),
   });
 }
 
 export async function recomputeSeason(
-  db: Database,
+  db: RankingDatabase,
   clock: Clock,
   seasonId: string,
-  options: { force?: boolean } = {},
+  options: { force?: boolean; allowClosed?: boolean } = {},
 ): Promise<boolean> {
-  const season = await db.select().from(seasons).where(eq(seasons.id, seasonId)).then((r) => r[0]);
-  if (!season || season.status === 'closed') return false;
+  const season = await db
+    .select()
+    .from(seasons)
+    .where(eq(seasons.id, seasonId))
+    .then((r) => r[0]);
+  if (!season || (season.status === 'closed' && !options.allowClosed)) return false;
   const dirty = await db
     .select()
     .from(rankingDirty)
@@ -283,6 +300,41 @@ export async function recomputeSeason(
   return true;
 }
 
+/** Rebuild read-model rows beside frozen snapshots on an isolated PITR branch. */
+export async function rebuildSeasonForRestoreDrill(
+  db: Database,
+  clock: Clock,
+  seasonId: string,
+): Promise<boolean> {
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`
+      DELETE FROM game_bests
+      USING season_games
+      WHERE game_bests.season_game_id = season_games.id
+        AND season_games.season_id = ${seasonId}
+    `);
+    await tx.execute(sql`
+      INSERT INTO game_bests (season_game_id, user_id, verified_result_id, score)
+      SELECT DISTINCT ON (verified_results.season_game_id, verified_results.user_id)
+        verified_results.season_game_id,
+        verified_results.user_id,
+        verified_results.id,
+        verified_results.score
+      FROM verified_results
+      INNER JOIN season_games ON season_games.id = verified_results.season_game_id
+      WHERE season_games.season_id = ${seasonId}
+      ORDER BY
+        verified_results.season_game_id,
+        verified_results.user_id,
+        verified_results.score DESC,
+        verified_results.achieved_at ASC,
+        verified_results.created_at ASC,
+        verified_results.id ASC
+    `);
+    return recomputeSeason(tx, clock, seasonId, { force: true, allowClosed: true });
+  });
+}
+
 export async function recomputeAllDirty(db: Database, clock: Clock): Promise<void> {
   const seasonsRows = await db.select({ id: seasons.id }).from(seasons);
   for (const row of seasonsRows) {
@@ -291,12 +343,75 @@ export async function recomputeAllDirty(db: Database, clock: Clock): Promise<voi
 }
 
 export async function closeSeason(db: Database, clock: Clock, seasonId: string): Promise<void> {
-  await recomputeSeason(db, clock, seasonId, { force: true });
-  await db
-    .update(rankingSnapshots)
-    .set({ frozen: true })
-    .where(and(eq(rankingSnapshots.seasonId, seasonId), eq(rankingSnapshots.frozen, false)));
-  await db.update(seasons).set({ status: 'closed' }).where(eq(seasons.id, seasonId));
+  await db.transaction(async (tx) => {
+    const season = await tx
+      .select({ status: seasons.status })
+      .from(seasons)
+      .where(eq(seasons.id, seasonId))
+      .for('update')
+      .then((rows) => rows[0]);
+    if (!season || season.status === 'closed') return;
+
+    await tx.update(seasons).set({ status: 'closing' }).where(eq(seasons.id, seasonId));
+    const now = clock.now();
+    const inFlight = await tx
+      .select({ id: attempts.id })
+      .from(attempts)
+      .innerJoin(seasonGames, eq(seasonGames.id, attempts.seasonGameId))
+      .leftJoin(runs, eq(runs.attemptId, attempts.id))
+      .leftJoin(verificationJobs, eq(verificationJobs.runId, runs.id))
+      .leftJoin(scoreSubmissions, eq(scoreSubmissions.runId, runs.id))
+      .where(
+        and(
+          eq(seasonGames.seasonId, seasonId),
+          or(
+            inArray(attempts.status, ['issued', 'active']),
+            and(
+              eq(attempts.status, 'submitted'),
+              or(
+                inArray(verificationJobs.state, ['queued', 'locked']),
+                eq(scoreSubmissions.verificationStatus, 'pending'),
+              ),
+            ),
+          ),
+          gt(attempts.expiresAt, now),
+          sql`${attempts.issuedAt} + (${ATTEMPT_TTL_SECONDS} * interval '1 second') > ${now}`,
+        ),
+      )
+      .limit(1);
+    if (inFlight.length > 0) return;
+
+    await recomputeSeason(tx, clock, seasonId, { force: true });
+    await tx
+      .update(rankingSnapshots)
+      .set({ frozen: true })
+      .where(and(eq(rankingSnapshots.seasonId, seasonId), eq(rankingSnapshots.frozen, false)));
+    await tx.update(seasons).set({ status: 'closed' }).where(eq(seasons.id, seasonId));
+  });
+}
+
+async function overlayCurrentHandles<
+  T extends { rows: Array<{ userId: string; handle: string | null }> },
+>(db: Database, payload: T): Promise<T> {
+  const userIds = [...new Set(payload.rows.map((row) => row.userId))];
+  if (userIds.length === 0) return payload;
+  const currentProfiles = await db
+    .select({ userId: profiles.userId, handle: profiles.handle, status: profiles.status })
+    .from(profiles)
+    .where(inArray(profiles.userId, userIds));
+  const currentHandles = new Map(
+    currentProfiles.map((profile) => [
+      profile.userId,
+      profile.status === 'anonymised' ? 'retired' : profile.handle,
+    ]),
+  );
+  return {
+    ...payload,
+    rows: payload.rows.map((row) => ({
+      ...row,
+      handle: currentHandles.has(row.userId) ? currentHandles.get(row.userId)! : row.handle,
+    })),
+  } as T;
 }
 
 export async function readLeaderboard(
@@ -317,20 +432,27 @@ export async function readLeaderboard(
       and(
         eq(rankingSnapshots.seasonId, seasonId),
         eq(rankingSnapshots.subjectId, seasonGameId),
-        eq(rankingSnapshots.frozen, false),
+        inArray(rankingSnapshots.scope, ['game', 'daily']),
       ),
     )
+    .orderBy(asc(rankingSnapshots.frozen))
+    .limit(1)
     .then((r) => r[0]);
   if (!snap) return { asOf: new Date(0).toISOString(), rows: [], nextCursor: null, viewer: null };
-  const payload = snap.payload as GameSnapshotPayload;
-  const limit = Math.min(Math.max(query.limit ?? LEADERBOARD_PAGE_DEFAULT, 1), LEADERBOARD_PAGE_MAX);
+  const payload = await overlayCurrentHandles(db, snap.payload as GameSnapshotPayload);
+  const limit = Math.min(
+    Math.max(query.limit ?? LEADERBOARD_PAGE_DEFAULT, 1),
+    LEADERBOARD_PAGE_MAX,
+  );
   let cursor: LeaderboardCursor | undefined;
   if (query.cursor) {
     cursor = decodeCursor(query.cursor);
     if (!cursor) throw new ApiError('BAD_CURSOR');
   }
   const filtered = cursor
-    ? payload.rows.filter((row) => afterCursor(BigInt(row.score), new Date(row.achievedAt), row.userId, cursor))
+    ? payload.rows.filter((row) =>
+        afterCursor(BigInt(row.score), new Date(row.achievedAt), row.userId, cursor),
+      )
     : payload.rows;
   const page = filtered.slice(0, limit);
   const last = page[page.length - 1];
@@ -344,10 +466,7 @@ export async function readLeaderboard(
   return { asOf: payload.asOf, rows: page, nextCursor, viewer };
 }
 
-export async function readStandings(
-  db: Database,
-  seasonId: string,
-): Promise<ChampionshipPayload> {
+export async function readStandings(db: Database, seasonId: string): Promise<ChampionshipPayload> {
   const snap = await db
     .select()
     .from(rankingSnapshots)
@@ -356,12 +475,13 @@ export async function readStandings(
         eq(rankingSnapshots.seasonId, seasonId),
         eq(rankingSnapshots.scope, 'championship'),
         eq(rankingSnapshots.subjectId, seasonId),
-        eq(rankingSnapshots.frozen, false),
       ),
     )
+    .orderBy(asc(rankingSnapshots.frozen))
+    .limit(1)
     .then((r) => r[0]);
   if (!snap) {
     return { asOf: new Date(0).toISOString(), provisional: true, rows: [] };
   }
-  return snap.payload as ChampionshipPayload;
+  return overlayCurrentHandles(db, snap.payload as ChampionshipPayload);
 }

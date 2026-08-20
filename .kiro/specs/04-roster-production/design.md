@@ -3,7 +3,7 @@
 **Depth:** full. This document is detailed enough to implement from directly.
 **Fork:** Branch A (ADR-0001). Worker stays Node.
 **Roster contracts:** ADR-0006.
-**Status:** approved 2026-08-18; executed.
+**Status:** executed; merged (PR #4).
 
 The previous scope draft named waves and four open questions. Those questions
 are closed in ADR-0006. Geometry and score numbers live in `docs/games/*.md`.

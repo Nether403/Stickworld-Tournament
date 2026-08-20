@@ -7,13 +7,116 @@ import {
 import { eq } from 'drizzle-orm';
 import { createDirectPool, createDb, type Database } from './client.js';
 import { loadWorkspaceEnv } from './env.js';
-import {
-  dailyBoards,
-  gameVersions,
-  games,
-  seasonGames,
-  seasons,
-} from './schema.js';
+import { dailyBoards, gameVersions, games, rankedInvites, seasonGames, seasons } from './schema.js';
+
+type SeedPolicy = 'fixed-course' | 'daily-seed' | 'weekly-seed';
+type InviteSeasonSlug = 'internal-0' | 'beta-0';
+type SeedWriter = Pick<Database, 'delete' | 'insert' | 'select'>;
+
+export interface GameSeedPlan {
+  slug: string;
+  registryId: number;
+  maxRunTicks: number;
+  seedPolicies: readonly SeedPolicy[];
+}
+
+export interface SeasonSeedPlan {
+  season: {
+    slug: string;
+    startsAt: Date;
+    endsAt: Date;
+    status: 'active';
+    rulesVersion: number;
+    entryPolicy: 'invite' | 'open';
+  };
+  inviteEmails: readonly string[];
+  games: readonly GameSeedPlan[];
+}
+
+const CHAMPIONSHIP_GAMES: readonly GameSeedPlan[] = [
+  {
+    slug: 'hookline-sprint',
+    registryId: 1,
+    maxRunTicks: 5400,
+    seedPolicies: ['fixed-course', 'daily-seed'],
+  },
+  {
+    slug: 'pickaxe-ascent',
+    registryId: 2,
+    maxRunTicks: 7200,
+    seedPolicies: ['fixed-course', 'daily-seed'],
+  },
+  {
+    slug: 'launch-lab',
+    registryId: 3,
+    maxRunTicks: 5400,
+    seedPolicies: ['fixed-course', 'daily-seed'],
+  },
+  {
+    slug: 'ragdoll-archery-rush',
+    registryId: 4,
+    maxRunTicks: 5400,
+    seedPolicies: ['fixed-course', 'daily-seed'],
+  },
+  {
+    slug: 'hammer-throw-havoc',
+    registryId: 5,
+    maxRunTicks: 5400,
+    seedPolicies: ['fixed-course', 'daily-seed'],
+  },
+  {
+    slug: 'rooftop-relay',
+    registryId: 7,
+    maxRunTicks: 9000,
+    seedPolicies: ['fixed-course', 'daily-seed'],
+  },
+  {
+    slug: 'balance-bike-blitz',
+    registryId: 8,
+    maxRunTicks: 9000,
+    seedPolicies: ['fixed-course', 'daily-seed'],
+  },
+  {
+    slug: 'cargo-chaos',
+    registryId: 9,
+    maxRunTicks: 9000,
+    seedPolicies: ['fixed-course', 'daily-seed'],
+  },
+  {
+    slug: 'demolition-dive',
+    registryId: 10,
+    maxRunTicks: 5400,
+    seedPolicies: ['fixed-course', 'daily-seed'],
+  },
+];
+
+const POGO_LAUNCH_GAME: GameSeedPlan = {
+  slug: 'pogo-tower',
+  registryId: 6,
+  maxRunTicks: 7200,
+  seedPolicies: ['weekly-seed'],
+};
+
+const CI_GAMES: readonly GameSeedPlan[] = [
+  {
+    slug: 'test-chamber',
+    registryId: 0,
+    maxRunTicks: 600,
+    seedPolicies: ['fixed-course', 'daily-seed', 'weekly-seed'],
+  },
+  ...CHAMPIONSHIP_GAMES.slice(0, 5),
+  { ...POGO_LAUNCH_GAME, seedPolicies: ['weekly-seed', 'daily-seed'] },
+  ...CHAMPIONSHIP_GAMES.slice(5),
+];
+
+const LAUNCH_GAMES: readonly GameSeedPlan[] = [
+  ...CHAMPIONSHIP_GAMES.slice(0, 5),
+  POGO_LAUNCH_GAME,
+  ...CHAMPIONSHIP_GAMES.slice(5),
+];
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function packSeed(seed: readonly [number, number, number, number]): Buffer {
   const out = Buffer.alloc(16);
@@ -31,17 +134,90 @@ function utcDateString(d: Date): string {
 function isoWeekMonday(d: Date): string {
   const day = d.getUTCDay();
   const offset = day === 0 ? -6 : 1 - day;
-  return utcDateString(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + offset)));
+  return utcDateString(
+    new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + offset)),
+  );
+}
+
+function normaliseInviteEmails(inviteEmails: readonly string[]): string[] {
+  const normalised = inviteEmails.map((email) => email.trim().toLowerCase());
+  for (const [index, email] of normalised.entries()) {
+    if (!EMAIL_PATTERN.test(email)) throw new Error(`invalid invite email at index ${index + 1}`);
+  }
+  if (new Set(normalised).size !== normalised.length) {
+    throw new Error('duplicate invite email');
+  }
+  return normalised;
+}
+
+export function parseInviteEmails(contents: string): string[] {
+  return normaliseInviteEmails(
+    contents
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0 && !line.startsWith('#')),
+  );
+}
+
+export function buildCiSeasonSeedPlan(): SeasonSeedPlan {
+  return {
+    season: {
+      slug: 'ci',
+      startsAt: new Date('2020-01-01T00:00:00.000Z'),
+      endsAt: new Date('2099-01-01T00:00:00.000Z'),
+      status: 'active',
+      rulesVersion: 1,
+      entryPolicy: 'open',
+    },
+    inviteEmails: [],
+    games: CI_GAMES,
+  };
+}
+
+export function buildInviteSeasonSeedPlan(input: {
+  slug: string;
+  startsAt: Date;
+  inviteEmails: readonly string[];
+}): SeasonSeedPlan {
+  if (input.slug !== 'internal-0' && input.slug !== 'beta-0') {
+    throw new Error('supported slugs are internal-0 and beta-0');
+  }
+  if (!Number.isFinite(input.startsAt.getTime())) throw new Error('startsAt must be a valid date');
+
+  const slug: InviteSeasonSlug = input.slug;
+  const inviteEmails = normaliseInviteEmails(input.inviteEmails);
+  if (slug === 'internal-0' && inviteEmails.length === 0) {
+    throw new Error('internal-0 requires at least one staff invite email');
+  }
+  if (slug === 'beta-0' && inviteEmails.length !== 24) {
+    throw new Error('beta-0 requires exactly 24 unique invite emails');
+  }
+  const durationDays = slug === 'beta-0' ? 14 : 7;
+
+  return {
+    season: {
+      slug,
+      startsAt: new Date(input.startsAt),
+      endsAt: new Date(input.startsAt.getTime() + durationDays * DAY_MS),
+      status: 'active',
+      rulesVersion: 2,
+      entryPolicy: 'invite',
+    },
+    inviteEmails,
+    games: LAUNCH_GAMES,
+  };
 }
 
 export async function seedGame(
-  db: Database,
+  db: SeedWriter,
   seasonId: string,
   opts: {
     slug: string;
     registryId: number;
     maxRunTicks: number;
-    seedPolicies?: readonly ('fixed-course' | 'daily-seed' | 'weekly-seed')[];
+    seedPolicies?: readonly SeedPolicy[];
+    activeFrom?: Date;
+    activeTo?: Date;
   },
   now = new Date(),
 ): Promise<void> {
@@ -54,7 +230,12 @@ export async function seedGame(
     .onConflictDoNothing()
     .returning();
   const gameRow =
-    game ?? (await db.select().from(games).where(eq(games.slug, opts.slug)).then((r) => r[0]));
+    game ??
+    (await db
+      .select()
+      .from(games)
+      .where(eq(games.slug, opts.slug))
+      .then((r) => r[0]));
   if (!gameRow) throw new Error(`failed to seed game ${opts.slug}`);
 
   const [version] = await db
@@ -74,7 +255,11 @@ export async function seedGame(
     .returning();
   const versionRow =
     version ??
-    (await db.select().from(gameVersions).where(eq(gameVersions.gameId, gameRow.id)).then((r) => r[0]));
+    (await db
+      .select()
+      .from(gameVersions)
+      .where(eq(gameVersions.gameId, gameRow.id))
+      .then((r) => r[0]));
   if (!versionRow) throw new Error(`failed to seed game_versions for ${opts.slug}`);
 
   const policies = opts.seedPolicies ?? (['fixed-course', 'daily-seed'] as const);
@@ -86,11 +271,107 @@ export async function seedGame(
         gameId: gameRow.id,
         gameVersionId: versionRow.id,
         seedPolicy: policy,
-        activeFrom: past,
-        activeTo: far,
+        activeFrom: opts.activeFrom ?? past,
+        activeTo: opts.activeTo ?? far,
       })
       .onConflictDoNothing();
   }
+}
+
+function sameSeasonConfiguration(
+  actual: typeof seasons.$inferSelect,
+  expected: SeasonSeedPlan['season'],
+): boolean {
+  return (
+    actual.startsAt.getTime() === expected.startsAt.getTime() &&
+    actual.endsAt.getTime() === expected.endsAt.getTime() &&
+    actual.status === expected.status &&
+    actual.rulesVersion === expected.rulesVersion &&
+    actual.entryPolicy === expected.entryPolicy
+  );
+}
+
+async function seedSeasonPlan(db: SeedWriter, plan: SeasonSeedPlan, now: Date): Promise<void> {
+  const [insertedSeason] = await db
+    .insert(seasons)
+    .values(plan.season)
+    .onConflictDoNothing()
+    .returning();
+  const season =
+    insertedSeason ??
+    (await db
+      .select()
+      .from(seasons)
+      .where(eq(seasons.slug, plan.season.slug))
+      .then((rows) => rows[0]));
+  if (!season) throw new Error(`failed to seed season ${plan.season.slug}`);
+  if (plan.season.slug !== 'ci' && !sameSeasonConfiguration(season, plan.season)) {
+    throw new Error(`season ${plan.season.slug} already exists with different configuration`);
+  }
+
+  for (const game of plan.games) {
+    await seedGame(
+      db,
+      season.id,
+      {
+        ...game,
+        activeFrom: plan.season.startsAt,
+        activeTo: plan.season.endsAt,
+      },
+      now,
+    );
+  }
+
+  if (plan.season.entryPolicy === 'invite') {
+    await db.delete(rankedInvites);
+    await db
+      .insert(rankedInvites)
+      .values(plan.inviteEmails.map((email) => ({ email, invitedAt: now })));
+  }
+
+  const seededSeasonGames = await db
+    .select()
+    .from(seasonGames)
+    .where(eq(seasonGames.seasonId, season.id));
+  const dailies = seededSeasonGames.filter((row) => row.seedPolicy === 'daily-seed');
+  if (dailies.length === 0) throw new Error('failed to seed daily season_games');
+  const today = utcDateString(now);
+  for (const daily of dailies) {
+    await db
+      .insert(dailyBoards)
+      .values({
+        seasonGameId: daily.id,
+        utcDate: today,
+        seed: packSeed([9, 8, 7, daily.gameId.charCodeAt(0) ?? 6]),
+      })
+      .onConflictDoNothing();
+  }
+
+  const weeklies = seededSeasonGames.filter((row) => row.seedPolicy === 'weekly-seed');
+  const monday = isoWeekMonday(now);
+  for (const weekly of weeklies) {
+    await db
+      .insert(dailyBoards)
+      .values({
+        seasonGameId: weekly.id,
+        utcDate: monday,
+        seed: packSeed([4, 5, 6, weekly.gameId.charCodeAt(0) ?? 6]),
+      })
+      .onConflictDoNothing();
+  }
+}
+
+export async function seedInviteSeason(
+  db: Database,
+  input: {
+    slug: string;
+    startsAt: Date;
+    inviteEmails: readonly string[];
+  },
+  now = new Date(),
+): Promise<void> {
+  const plan = buildInviteSeasonSeedPlan(input);
+  await db.transaction(async (tx) => seedSeasonPlan(tx, plan, now));
 }
 
 export async function seedDatabase(): Promise<void> {
@@ -99,81 +380,7 @@ export async function seedDatabase(): Promise<void> {
   const db = createDb(pool);
   try {
     const now = new Date();
-    const far = new Date('2099-01-01T00:00:00.000Z');
-    const past = new Date('2020-01-01T00:00:00.000Z');
-
-    const [season] = await db
-      .insert(seasons)
-      .values({
-        slug: 'ci',
-        startsAt: past,
-        endsAt: far,
-        status: 'active',
-        rulesVersion: 1,
-      })
-      .onConflictDoNothing()
-      .returning();
-    const seasonRow =
-      season ?? (await db.select().from(seasons).where(eq(seasons.slug, 'ci')).then((r) => r[0]));
-    if (!seasonRow) throw new Error('failed to seed season ci');
-
-    await seedGame(
-      db,
-      seasonRow.id,
-      {
-        slug: 'test-chamber',
-        registryId: 0,
-        maxRunTicks: 600,
-        seedPolicies: ['fixed-course', 'daily-seed', 'weekly-seed'],
-      },
-      now,
-    );
-    await seedGame(db, seasonRow.id, { slug: 'hookline-sprint', registryId: 1, maxRunTicks: 5400 }, now);
-    await seedGame(db, seasonRow.id, { slug: 'pickaxe-ascent', registryId: 2, maxRunTicks: 7200 }, now);
-    await seedGame(db, seasonRow.id, { slug: 'launch-lab', registryId: 3, maxRunTicks: 5400 }, now);
-    await seedGame(db, seasonRow.id, { slug: 'ragdoll-archery-rush', registryId: 4, maxRunTicks: 5400 }, now);
-    await seedGame(db, seasonRow.id, { slug: 'hammer-throw-havoc', registryId: 5, maxRunTicks: 5400 }, now);
-    await seedGame(
-      db,
-      seasonRow.id,
-      {
-        slug: 'pogo-tower',
-        registryId: 6,
-        maxRunTicks: 7200,
-        seedPolicies: ['weekly-seed', 'daily-seed'],
-      },
-      now,
-    );
-    await seedGame(db, seasonRow.id, { slug: 'rooftop-relay', registryId: 7, maxRunTicks: 9000 }, now);
-    await seedGame(db, seasonRow.id, { slug: 'balance-bike-blitz', registryId: 8, maxRunTicks: 9000 }, now);
-    await seedGame(db, seasonRow.id, { slug: 'cargo-chaos', registryId: 9, maxRunTicks: 9000 }, now);
-    await seedGame(db, seasonRow.id, { slug: 'demolition-dive', registryId: 10, maxRunTicks: 5400 }, now);
-
-    const dailies = await db.select().from(seasonGames).where(eq(seasonGames.seedPolicy, 'daily-seed'));
-    if (dailies.length === 0) throw new Error('failed to seed daily season_games');
-    const today = utcDateString(now);
-    for (const daily of dailies) {
-      await db
-        .insert(dailyBoards)
-        .values({
-          seasonGameId: daily.id,
-          utcDate: today,
-          seed: packSeed([9, 8, 7, daily.gameId.charCodeAt(0) ?? 6]),
-        })
-        .onConflictDoNothing();
-    }
-    const weeklies = await db.select().from(seasonGames).where(eq(seasonGames.seedPolicy, 'weekly-seed'));
-    const monday = isoWeekMonday(now);
-    for (const weekly of weeklies) {
-      await db
-        .insert(dailyBoards)
-        .values({
-          seasonGameId: weekly.id,
-          utcDate: monday,
-          seed: packSeed([4, 5, 6, weekly.gameId.charCodeAt(0) ?? 6]),
-        })
-        .onConflictDoNothing();
-    }
+    await db.transaction(async (tx) => seedSeasonPlan(tx, buildCiSeasonSeedPlan(), now));
   } finally {
     await pool.end();
   }

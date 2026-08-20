@@ -1,12 +1,14 @@
 import { rateLimitHits, type Database } from '@stickworld/db';
 import { sql } from 'drizzle-orm';
 import { ApiError } from './errors.js';
+import type { ReasonCode } from './reason-codes.js';
 
 export async function hitRateLimit(
   db: Database,
   key: string,
   windowStart: Date,
   limit: number,
+  reasonCode: ReasonCode = 'RATE_LIMITED',
 ): Promise<void> {
   const rows = await db
     .insert(rateLimitHits)
@@ -17,7 +19,7 @@ export async function hitRateLimit(
     })
     .returning({ count: rateLimitHits.count });
   const count = rows[0]?.count ?? 0;
-  if (count > limit) throw new ApiError('RATE_LIMITED');
+  if (count > limit) throw new ApiError(reasonCode);
 }
 
 export function floorWindow(now: Date, ms: number): Date {

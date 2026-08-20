@@ -1,0 +1,93 @@
+# Railway operations
+
+Stickworld uses one Railway project with a public `web` service, a private
+`worker` service, and cron processes built from the same repository. Keep the
+service root at the repository root. Nixpacks detects the root `packageManager`
+and `build` script, so this repository does not require a Dockerfile or a
+custom Nixpacks file.
+
+## Commands
+
+| Process                   | Release command                          | Start command                                               | Public route                  |
+| ------------------------- | ---------------------------------------- | ----------------------------------------------------------- | ----------------------------- |
+| web                       | `pnpm db:migrate`                        | `pnpm --filter @stickworld/web start`                       | Yes; healthcheck `/v1/health` |
+| worker                    | None; startup checks the Drizzle journal | `pnpm --filter @stickworld/worker start`                    | **No**                        |
+| hourly cron               | None                                     | `pnpm --filter @stickworld/worker cron recompute-rankings`  | No                            |
+| daily cron, 00:05 UTC     | None                                     | `pnpm --filter @stickworld/worker cron rotate-daily`        | No                            |
+| season-close cron, manual | None                                     | `pnpm --filter @stickworld/worker cron close-season <slug>` | No                            |
+
+The web release command must finish before the new web process starts. It uses
+the direct connection while long-lived web, worker, and cron processes use the
+pooled connection. The worker refuses to enter its job loop if any migration
+listed by the committed Drizzle journal is absent from the database or has a
+different hash. It also refuses to start when a forward migration SQL file is
+not listed in the journal; rollback `*.down.sql` files are excluded from that
+two-way check.
+
+Do not create a Railway domain or TCP proxy for the worker. It does not bind an
+HTTP server. Railway should probe only the web service at `/v1/health`.
+
+Staging-only drill: set web `STICKWORLD_HEALTH_FAIL=1` to make `/v1/health`
+return HTTP 500 without changing code. Never set that variable in production.
+Railway will refuse to promote that revision while the probe path is
+`/v1/health`.
+
+## Live project (2026-08-20)
+
+Workspace **Dutch Data Labs**. Railway project `Stickworld-Tournament`
+(`320a6936-c1fe-4e26-9310-3c8a10cec276`).
+
+| Environment | ID | Notes |
+| ----------- | -- | ----- |
+| production  | `4a64c20d-e199-4077-ad55-fe948dc9bb04` | Services configured; Spec 5 image not deployed yet. Neon default branch still on migrations `0000`/`0001`. |
+| staging     | `6f0c29de-4c8e-435a-9cec-687a2df11ecd` | Web/worker/cron deployed from Spec 5. Neon branch `railway-staging` (`br-ancient-forest-awwzmbt6`) has `0002_spec5_compliance`. |
+
+Services: `web` (public), `worker` (no public domain), `cron-recompute` (`0 * * * *`),
+`cron-daily` (`5 0 * * *`). Staging web:
+`https://web-staging-67f4.up.railway.app`.
+
+Browser-side `host.start` and `host.finish` events cannot appear in Railway
+stdout because the game host runs in the user's browser, not in a Railway Node
+process. This repository intentionally has no browser telemetry POST or beacon
+endpoint. Railway log checks cover server-side web events such as
+`attempt.issue` and `attempt.finish`, plus worker and cron telemetry.
+
+## Environment variable names
+
+Configure only the names each service needs; store values in Railway, never in
+the repository.
+
+| Service | Names                                                                                                 |
+| ------- | ----------------------------------------------------------------------------------------------------- |
+| web     | `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `ATTEMPT_HMAC_SECRET`, `NEON_AUTH_*`, `STICKWORLD_TELEMETRY` |
+| worker  | `DATABASE_URL`, `STICKWORLD_TELEMETRY`                                                                |
+| cron    | `DATABASE_URL`, `STICKWORLD_TELEMETRY`                                                                |
+
+Before every production release, inspect the effective variables, including
+shared/project-level variables:
+
+- [x] Production web does not list `GEMINI_API_KEY`.
+- [x] Production web does not list `DEEPGRAM_API_KEY`.
+- [x] Production web does not list `OPENROUTER_API_KEY`.
+- [x] Production worker does not list `GEMINI_API_KEY`.
+- [x] Production worker does not list `DEEPGRAM_API_KEY`.
+- [x] Production worker does not list `OPENROUTER_API_KEY`.
+- [x] Telemetry is enabled on web, worker, and cron.
+
+Listed 2026-08-20 with `railway variable list` on production and staging `web` /
+`worker` / cron services. Forbidden AI keys were absent. `STICKWORLD_TELEMETRY=1`
+was present. Staging `web` also had no `STICKWORLD_HEALTH_FAIL` after the drill.
+
+Do not check these boxes from repository inspection. They require a live
+Railway environment-variable listing.
+
+## Release check
+
+1. Confirm the build and web release command succeeded.
+2. Confirm `/v1/health` returns HTTP 200 with only the generic health body.
+3. Confirm a web request produces an `attempt.issue` or `attempt.finish` JSON
+   line and a worker verification produces `verify.ok` or `verify.reject`
+   followed by `verify.duration_ms`.
+4. Confirm the worker has no public route and begins processing only after its
+   migration check succeeds.
+5. Use `docs/ops/rollback.md` if either service regresses.

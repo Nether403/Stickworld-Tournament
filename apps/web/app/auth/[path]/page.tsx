@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
+import Link from 'next/link';
 import { authClient } from '@/lib/auth/client';
 import { signInWithEmail, signUpWithEmail } from '@/lib/auth/email';
 
@@ -12,11 +14,32 @@ export default function AuthPage() {
 
   return (
     <main>
+      <header>
+        <Link href="/" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
+          <Image
+            src="/assets/brand/logo.svg"
+            alt="Stickworld Tournament logo"
+            width={64}
+            height={64}
+            style={{ maxWidth: '100%', height: 'auto' }}
+            priority
+          />
+          <Image
+            src="/assets/brand/wordmark.svg"
+            alt="Stickworld Tournament wordmark"
+            width={350}
+            height={60}
+            style={{ maxWidth: '100%', height: 'auto', minWidth: 0 }}
+            priority
+          />
+        </Link>
+      </header>
       <h1>Sign in</h1>
       <p>
-        Google works in development with Neon shared credentials. Email uses the
-        Neon Auth bundled sender.
+        Google works in development with Neon shared credentials. Email uses the Neon Auth bundled
+        sender.
       </p>
+      <p>By continuing with Google, you confirm that you are 13 or older.</p>
       <p>
         <button
           type="button"
@@ -102,6 +125,9 @@ export default function AuthPage() {
             required
             minLength={8}
           />
+        </label>
+        <label>
+          <input type="checkbox" name="age-confirmation" required /> I am 13 or older
         </label>
         <button type="submit">Create account</button>
       </form>

@@ -92,6 +92,9 @@ importers:
       '@stickworld/sim-core':
         specifier: workspace:*
         version: link:../../packages/sim-core
+      '@stickworld/telemetry':
+        specifier: workspace:*
+        version: link:../../packages/telemetry
       '@stickworld/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -132,6 +135,9 @@ importers:
       typescript:
         specifier: 5.9.3
         version: 5.9.3
+      vitest:
+        specifier: 3.2.7
+        version: 3.2.7(@types/node@22.19.21)(tsx@4.23.12)
 
   apps/worker:
     dependencies:
@@ -171,6 +177,9 @@ importers:
       '@stickworld/platform':
         specifier: workspace:*
         version: link:../../packages/platform
+      '@stickworld/telemetry':
+        specifier: workspace:*
+        version: link:../../packages/telemetry
       drizzle-orm:
         specifier: 0.45.2
         version: 0.45.2(@types/pg@8.23.1)(kysely@0.29.5)(pg@8.23.0)
@@ -703,6 +712,9 @@ importers:
 
   packages/game-test-chamber:
     dependencies:
+      '@stickworld/input':
+        specifier: workspace:*
+        version: link:../input
       '@stickworld/replay':
         specifier: workspace:*
         version: link:../replay
@@ -804,6 +816,9 @@ importers:
       '@stickworld/sim-core':
         specifier: workspace:*
         version: link:../sim-core
+      '@stickworld/telemetry':
+        specifier: workspace:*
+        version: link:../telemetry
       drizzle-orm:
         specifier: 0.45.2
         version: 0.45.2(@types/pg@8.23.1)(kysely@0.29.5)(pg@8.23.0)
@@ -829,6 +844,9 @@ importers:
 
   packages/replay:
     dependencies:
+      '@stickworld/input':
+        specifier: workspace:*
+        version: link:../input
       '@stickworld/sim-core':
         specifier: workspace:*
         version: link:../sim-core

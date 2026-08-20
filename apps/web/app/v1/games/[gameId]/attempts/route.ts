@@ -1,12 +1,16 @@
 import { issueAttempt, requireRankedUser, ApiError } from '@stickworld/platform';
-import { authUserId, clientIp, getDb, jsonError, platformContext } from '@/lib/server';
+import { authIdentity, clientIp, getDb, jsonError, platformContext } from '@/lib/server';
+import { emitRequestTelemetry } from '@/lib/request-telemetry';
 
-export async function POST(req: Request, ctx: { params: Promise<{ gameId: string }> }): Promise<Response> {
+export async function POST(
+  req: Request,
+  ctx: { params: Promise<{ gameId: string }> },
+): Promise<Response> {
   try {
-    const authId = await authUserId();
-    if (!authId) throw new ApiError('UNAUTHENTICATED');
+    const identity = await authIdentity();
+    if (!identity.id) throw new ApiError('UNAUTHENTICATED');
     const db = getDb();
-    const user = await requireRankedUser(db, authId);
+    const user = await requireRankedUser(db, identity.id, identity.email);
     const { gameId } = await ctx.params;
     const body = (await req.json().catch(() => ({}))) as {
       seedPolicy?: 'fixed-course' | 'daily-seed' | 'weekly-seed';
@@ -16,6 +20,13 @@ export async function POST(req: Request, ctx: { params: Promise<{ gameId: string
       gameSlug: gameId,
       seedPolicy: body.seedPolicy ?? 'fixed-course',
       ip: clientIp(req),
+      email: identity.email,
+    });
+    emitRequestTelemetry(req, 'attempt.issue', {
+      gameId: result.gameId,
+      gameVersion: result.gameVersion,
+      seasonId: result.seasonId,
+      mode: 'ranked',
     });
     return Response.json(result, { status: 201 });
   } catch (err) {

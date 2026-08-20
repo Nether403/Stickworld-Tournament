@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { auth } from '@/lib/auth/server';
 import { HandleForm } from './handle-form';
@@ -18,8 +19,33 @@ export default async function HomePage(): Promise<ReactNode> {
 
   return (
     <main>
+      <header style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
+        <Image
+          src="/assets/brand/logo.svg"
+          alt="Stickworld Tournament logo"
+          width={72}
+          height={72}
+          style={{ maxWidth: '100%', height: 'auto' }}
+          priority
+        />
+        <Image
+          src="/assets/brand/wordmark.svg"
+          alt="Stickworld Tournament wordmark"
+          width={420}
+          height={72}
+          style={{ maxWidth: '100%', height: 'auto', minWidth: 0 }}
+          priority
+        />
+      </header>
       <h1>Stickworld Tournament</h1>
       <p>Scores count only after the server re-simulates the replay.</p>
+      <section aria-labelledby="championship-heading">
+        <h2 id="championship-heading">Championship</h2>
+        <p>
+          Nine fixed-course games count toward the championship. Pogo Tower is weekly-only. Maximum
+          championship total: 9,000 points.
+        </p>
+      </section>
       {signedIn ? (
         <>
           <p>Signed in as {signedIn.email ?? signedIn.name ?? signedIn.id}</p>

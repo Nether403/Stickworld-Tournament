@@ -8,11 +8,13 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "start": "node dist/worker.js",
-    "cron": "node dist/cron.js"
+    "cron": "node dist/cron.js",
+    "pitr-rebuild": "node dist/pitr-rebuild.js"
   },
   "dependencies": {
     "@stickworld/db": "workspace:*",
     "@stickworld/platform": "workspace:*",
+    "@stickworld/telemetry": "workspace:*",
     "@stickworld/game-hookline-sprint": "workspace:*",
     "@stickworld/game-pickaxe-ascent": "workspace:*",
     "@stickworld/game-launch-lab": "workspace:*",

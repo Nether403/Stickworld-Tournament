@@ -8,28 +8,28 @@ design is **approved** and every earlier spec's definition of done is green.
 | [01](./01-simulation-replay-core/) | Deterministic Simulation and Replay Core | **full** | 1–4 | **done, merged** ([PR #1](https://github.com/Nether403/Stickworld-Tournament/pull/1)) |
 | [02](./02-tournament-platform-ranking/) | Tournament Platform and Ranking | **full** | 5–9, 11, 13 | **done, merged** ([PR #2](https://github.com/Nether403/Stickworld-Tournament/pull/2)) |
 | [03](./03-game-production-kit/) | Game Production Kit and Reference Game | **full** | 10, 12, 14 | **done, merged** ([PR #3](https://github.com/Nether403/Stickworld-Tournament/pull/3)) |
-| [04](./04-roster-production/) | Roster Production (games 3–10) | **full** | 15–18 | **approved 2026-08-18; executing** |
-| [05](./05-assets-integrity-operations-launch/) | Assets, Integrity, Operations, Launch | scope | 19–24 | blocked on Spec 4 |
+| [04](./04-roster-production/) | Roster Production (games 3–10) | **full** | 15–18 | **done, merged** ([PR #4](https://github.com/Nether403/Stickworld-Tournament/pull/4)) |
+| [05](./05-assets-integrity-operations-launch/) | Assets, Integrity, Operations, Launch | **full** | 19–24 | **approved 2026-08-18; executing** |
 
-Plus a non-spec parallel track: [`docs/legal/brand-and-ip-clearance.md`](../../docs/legal/brand-and-ip-clearance.md) — started, long lead times, gates naming.
+Plus a non-spec parallel track: [`docs/legal/brand-and-ip-clearance.md`](../../docs/legal/brand-and-ip-clearance.md) — started, long lead times, gates **public** naming and Season 1.
 
-**Vendors (locked):** Neon (Postgres + Auth + Branches) + Railway (web, worker, cron). No other cloud.
+**Vendors (locked):** Neon (Postgres + Auth + Branches) + Railway (web, worker, cron). No other cloud. Spec 5 does not add Sentry, Cloudflare, or an object store (ADR-0007).
 
 **Auth (current):** Google OAuth + email signup via Neon Managed Better Auth. GitHub is deferred. Discord is not a Neon first-party provider. See `docs/adr/0004-spec2-platform-stack.md` and `docs/adr/0005-spec3-game-host-and-auth.md`.
 
 ---
 
-## Why Spec 1 was full depth first, and 4–5 stay scope
+## Why Spec 5 is full depth now
 
-Spec 1 contained a determinism fork. That fork is **resolved: Branch A**. Specs 2–5 do not need a determinism-axis rewrite.
+Spec 1 contained a determinism fork. That fork is **resolved: Branch A**.
 
 Spec 2 is full depth and executed: worker runtime, schema, and `/v1` are real.
 
 Spec 3 is full depth and executed: kit, checklist, Hookline, Pickaxe, per-slug play pages.
 
-Spec 4 is now full depth because the kit and seam exist: waves, best-of-as-phases, ragdoll's first consumer, weekly-seed, and frozen `docs/games/*.md` can be named without executing them.
+Spec 4 is full depth and executed: games 3–10, weekly-seed, ragdoll, Demolition Dive on Branch A.
 
-Spec 5 stays at scope-and-contract depth until Spec 4 lands.
+Spec 5 is now full depth because the roster, host, and ranked pipeline exist: asset provenance, `InputSource`, UGC/GDPR, the CI browser matrix, Railway/Neon ops, and the season ramp can be named without writing them twice. Open questions from the scope draft are closed in ADR-0007.
 
 ---
 
@@ -42,9 +42,9 @@ Spec 2  merged to main (PR #2)
    ▼
 Spec 3  merged to main (PR #3)
    ▼
-Spec 4  approved 2026-08-18 ──► executing ──► STOP after exit evidence; Spec 5 waits
+Spec 4  merged to main (PR #4)
    ▼
-Spec 5  revise → approve → execute → launch
+Spec 5  approved 2026-08-18 ──► executing ──► STOP after exit evidence
 ```
 
 ---
@@ -52,13 +52,15 @@ Spec 5  revise → approve → execute → launch
 ## The project in one paragraph
 
 A browser-based competitive platform hosting ten original single-player stickman
-physics games. Each game has a verified leaderboard; one championship ranking
-spans all ten. The hard problem is not the games — it is score trust. The
-browser belongs to the player, so a client-reported score is worthless. Every
-trust claim depends on the server independently recomputing each score from
-recorded inputs, which requires bit-identical physics in browser and server.
-Spec 1 proved that for one pinned Rapier `-compat` 0.20.0 build. Spec 2 made
-the server the issuer of every ranked run.
+physics games. Each game has a verified leaderboard; a championship ranking
+spans the nine **fixed-course** titles (Pogo Tower is weekly-seed only and
+does not contribute championship points). The hard problem is not the games —
+it is score trust. The browser belongs to the player, so a client-reported
+score is worthless. Every trust claim depends on the server independently
+recomputing each score from recorded inputs, which requires bit-identical
+physics in browser and server. Spec 1 proved that for one pinned Rapier
+`-compat` 0.20.0 build. Spec 2 made the server the issuer of every ranked run.
+Spec 4 put all ten games on the catalogue.
 
 ---
 

@@ -3,11 +3,13 @@ import {
   dailyBoards,
   gameVersions,
   games,
+  profiles,
+  rankedInvites,
   seasonGames,
   seasons,
   type Database,
 } from '@stickworld/db';
-import { and, asc, eq, gte, lt, sql } from 'drizzle-orm';
+import { and, asc, eq, gte, isNull, lt, lte, sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { audit } from './audit.js';
 import { signAttemptToken } from './attempt-token.js';
@@ -29,12 +31,15 @@ export interface IssueInput {
   gameSlug: string;
   seedPolicy: 'fixed-course' | 'daily-seed' | 'weekly-seed';
   ip: string;
+  email?: string | null;
 }
 
 export interface IssueResult {
   attemptId: string;
   seed: [number, number, number, number];
+  gameId: string;
   gameVersion: string;
+  seasonId: string;
   expiresAt: string;
   token: string;
   dailyCapRemaining: number;
@@ -80,11 +85,21 @@ export async function issueAttempt(
       floorWindow(now, 3_600_000),
       ISSUE_RATE_USER_PER_HOUR,
     );
-    await hitRateLimit(db, `issue:ip:${input.ip}:m`, floorWindow(now, 60_000), ISSUE_RATE_IP_PER_MIN);
+    await hitRateLimit(
+      db,
+      `issue:ip:${input.ip}:m`,
+      floorWindow(now, 60_000),
+      ISSUE_RATE_IP_PER_MIN,
+    );
 
-    const game = await db.select().from(games).where(eq(games.slug, input.gameSlug)).then((r) => r[0]);
+    const game = await db
+      .select()
+      .from(games)
+      .where(eq(games.slug, input.gameSlug))
+      .then((r) => r[0]);
     if (!game) throw new ApiError('SEASON_INACTIVE');
 
+    // Prefer a launch season over the CI fallback; multiple launch matches use slug order.
     const sg = await db
       .select()
       .from(seasonGames)
@@ -94,13 +109,31 @@ export async function issueAttempt(
           eq(seasonGames.gameId, game.id),
           eq(seasonGames.seedPolicy, input.seedPolicy),
           eq(seasons.status, 'active'),
+          lte(seasonGames.activeFrom, now),
+          gte(seasonGames.activeTo, now),
         ),
       )
-      .orderBy(asc(seasons.slug))
+      .orderBy(sql`CASE WHEN ${seasons.slug} = 'ci' THEN 1 ELSE 0 END`, asc(seasons.slug))
       .then((r) => r[0]);
     if (!sg) throw new ApiError('SEASON_INACTIVE');
-    if (now < sg.season_games.activeFrom || now > sg.season_games.activeTo) {
-      throw new ApiError('SEASON_INACTIVE');
+
+    let invite: typeof rankedInvites.$inferSelect | undefined;
+    if (sg.seasons.entryPolicy === 'invite') {
+      const profile = await db
+        .select()
+        .from(profiles)
+        .where(eq(profiles.userId, input.userId))
+        .then((rows) => rows[0]);
+      if (profile?.role !== 'moderator') {
+        const inviteEmail = profile?.email ?? input.email;
+        if (!inviteEmail) throw new ApiError('NOT_INVITED');
+        invite = await db
+          .select()
+          .from(rankedInvites)
+          .where(eq(rankedInvites.email, inviteEmail))
+          .then((rows) => rows[0]);
+        if (!invite) throw new ApiError('NOT_INVITED');
+      }
     }
 
     const version = await db
@@ -118,7 +151,8 @@ export async function issueAttempt(
 
     let seed: Seed128;
     if (input.seedPolicy === 'daily-seed' || input.seedPolicy === 'weekly-seed') {
-      const utc = input.seedPolicy === 'weekly-seed' ? isoWeekMonday(now) : now.toISOString().slice(0, 10);
+      const utc =
+        input.seedPolicy === 'weekly-seed' ? isoWeekMonday(now) : now.toISOString().slice(0, 10);
       const board = await db
         .select()
         .from(dailyBoards)
@@ -140,16 +174,32 @@ export async function issueAttempt(
     const nonce = Buffer.from(ctx.entropy.randomBytes(16));
     const attemptId = randomUUID();
     const expiresAt = new Date(now.getTime() + ATTEMPT_TTL_SECONDS * 1000);
-    await db.insert(attempts).values({
-      id: attemptId,
-      userId: input.userId,
-      seasonGameId: sg.season_games.id,
-      gameVersionId: version.id,
-      seed: packSeed(seed),
-      nonce,
-      issuedAt: now,
-      expiresAt,
-      status: 'issued',
+    await db.transaction(async (tx) => {
+      const lockedSeason = await tx
+        .select({ status: seasons.status })
+        .from(seasons)
+        .where(eq(seasons.id, sg.seasons.id))
+        .for('update')
+        .then((rows) => rows[0]);
+      if (lockedSeason?.status !== 'active') throw new ApiError('SEASON_INACTIVE');
+
+      await tx.insert(attempts).values({
+        id: attemptId,
+        userId: input.userId,
+        seasonGameId: sg.season_games.id,
+        gameVersionId: version.id,
+        seed: packSeed(seed),
+        nonce,
+        issuedAt: now,
+        expiresAt,
+        status: 'issued',
+      });
+      if (invite) {
+        await tx
+          .update(rankedInvites)
+          .set({ consumedAt: now, consumedUserId: input.userId })
+          .where(and(eq(rankedInvites.email, invite.email), isNull(rankedInvites.consumedAt)));
+      }
     });
     const token = signAttemptToken(
       {
@@ -164,7 +214,9 @@ export async function issueAttempt(
     return {
       attemptId,
       seed: [seed[0], seed[1], seed[2], seed[3]],
+      gameId: game.slug,
       gameVersion: version.gameVersion,
+      seasonId: sg.seasons.id,
       expiresAt: expiresAt.toISOString(),
       token,
       dailyCapRemaining: remaining - 1,

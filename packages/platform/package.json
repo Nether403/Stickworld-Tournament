@@ -33,6 +33,7 @@
     "@stickworld/game-demolition-dive": "workspace:*",
     "@stickworld/replay": "workspace:*",
     "@stickworld/sim-core": "workspace:*",
+    "@stickworld/telemetry": "workspace:*",
     "drizzle-orm": "0.45.2",
     "pg": "8.23.0"
   },

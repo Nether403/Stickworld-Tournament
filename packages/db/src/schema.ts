@@ -25,12 +25,25 @@ export const attemptStatus = pgEnum('attempt_status', [
   'abandoned',
   'expired',
 ]);
-export const verificationStatus = pgEnum('verification_status', ['pending', 'verified', 'rejected']);
+export const verificationStatus = pgEnum('verification_status', [
+  'pending',
+  'verified',
+  'rejected',
+]);
 export const jobState = pgEnum('job_state', ['queued', 'locked', 'done', 'failed']);
 export const seasonStatus = pgEnum('season_status', ['scheduled', 'active', 'closing', 'closed']);
 export const seedPolicy = pgEnum('seed_policy', ['fixed-course', 'daily-seed', 'weekly-seed']);
 export const snapshotScope = pgEnum('snapshot_scope', ['game', 'championship', 'daily', 'best6']);
-export const profileStatus = pgEnum('profile_status', ['active', 'suspended']);
+export const profileStatus = pgEnum('profile_status', ['active', 'suspended', 'anonymised']);
+export const profileRole = pgEnum('profile_role', ['player', 'moderator']);
+export const seasonEntryPolicy = pgEnum('season_entry_policy', ['invite', 'open']);
+export const ugcReportStatus = pgEnum('ugc_report_status', ['open', 'dismissed', 'actioned']);
+export const moderationActionType = pgEnum('moderation_action', [
+  'dismiss',
+  'force_release_handle',
+  'suspend',
+  'unsuspend',
+]);
 
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({
   dataType() {
@@ -55,6 +68,8 @@ export const profiles = pgTable('profiles', {
   handleClaimedAt: timestamp('handle_claimed_at', { withTimezone: true }),
   handleChangedAt: timestamp('handle_changed_at', { withTimezone: true }),
   status: profileStatus('status').notNull().default('active'),
+  role: profileRole('role').notNull().default('player'),
+  email: citext('email').unique(),
   ...timestamps,
 });
 
@@ -65,8 +80,52 @@ export const seasons = pgTable('seasons', {
   endsAt: timestamp('ends_at', { withTimezone: true }).notNull(),
   status: seasonStatus('status').notNull(),
   rulesVersion: integer('rules_version').notNull(),
+  entryPolicy: seasonEntryPolicy('entry_policy').notNull().default('open'),
   ...timestamps,
 });
+
+export const rankedInvites = pgTable('ranked_invites', {
+  email: citext('email').primaryKey(),
+  invitedAt: timestamp('invited_at', { withTimezone: true }).notNull(),
+  consumedAt: timestamp('consumed_at', { withTimezone: true }),
+  consumedUserId: uuid('consumed_user_id').references(() => profiles.userId),
+});
+
+export const ugcReports = pgTable(
+  'ugc_reports',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    reporterUserId: uuid('reporter_user_id').references(() => profiles.userId),
+    reporterIpHash: text('reporter_ip_hash').notNull(),
+    targetUserId: uuid('target_user_id')
+      .notNull()
+      .references(() => profiles.userId),
+    reasonCode: text('reason_code').notNull(),
+    details: text('details').notNull().default(''),
+    status: ugcReportStatus('status').notNull().default('open'),
+    ...timestamps,
+  },
+  (t) => [index('ugc_reports_queue').on(t.status, t.createdAt)],
+);
+
+export const moderationActions = pgTable(
+  'moderation_actions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    reportId: uuid('report_id').references(() => ugcReports.id),
+    actorUserId: uuid('actor_user_id')
+      .notNull()
+      .references(() => profiles.userId),
+    targetUserId: uuid('target_user_id')
+      .notNull()
+      .references(() => profiles.userId),
+    action: moderationActionType('action').notNull(),
+    reasonCode: text('reason_code').notNull(),
+    reasonText: text('reason_text').notNull(),
+    ...timestamps,
+  },
+  (t) => [index('moderation_actions_target').on(t.targetUserId, t.createdAt)],
+);
 
 export const games = pgTable(
   'games',
@@ -92,17 +151,14 @@ export const gameVersions = pgTable(
     rapierBuildHash: text('rapier_build_hash').notNull(),
     detmathVersion: integer('detmath_version').notNull(),
     replayFormatVersion: integer('replay_format_version').notNull(),
-    configJson: jsonb('config_json').notNull().default(sql`'{}'::jsonb`),
+    configJson: jsonb('config_json')
+      .notNull()
+      .default(sql`'{}'::jsonb`),
     releasedAt: timestamp('released_at', { withTimezone: true }).notNull(),
     ...timestamps,
   },
   (t) => [
-    unique('game_versions_pin').on(
-      t.gameId,
-      t.gameVersion,
-      t.simulationVersion,
-      t.scoringVersion,
-    ),
+    unique('game_versions_pin').on(t.gameId, t.gameVersion, t.simulationVersion, t.scoringVersion),
     check('game_versions_hash_len', sql`length(${t.rapierBuildHash}) = 64`),
   ],
 );
@@ -156,24 +212,28 @@ export const attempts = pgTable(
   ],
 );
 
-export const runs = pgTable('runs', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  attemptId: uuid('attempt_id')
-    .notNull()
-    .unique()
-    .references(() => attempts.id),
-  userId: uuid('user_id')
-    .notNull()
-    .references(() => profiles.userId),
-  claimedScore: bigint('claimed_score', { mode: 'bigint' }).notNull(),
-  totalTicks: integer('total_ticks').notNull(),
-  replay: bytea('replay').notNull(),
-  finalStateHash: bytea('final_state_hash').notNull(),
-  ...timestamps,
-}, (t) => [
-  check('runs_ticks_positive', sql`${t.totalTicks} > 0`),
-  check('runs_hash_len', sql`octet_length(${t.finalStateHash}) = 8`),
-]);
+export const runs = pgTable(
+  'runs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    attemptId: uuid('attempt_id')
+      .notNull()
+      .unique()
+      .references(() => attempts.id),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => profiles.userId),
+    claimedScore: bigint('claimed_score', { mode: 'bigint' }).notNull(),
+    totalTicks: integer('total_ticks').notNull(),
+    replay: bytea('replay').notNull(),
+    finalStateHash: bytea('final_state_hash').notNull(),
+    ...timestamps,
+  },
+  (t) => [
+    check('runs_ticks_positive', sql`${t.totalTicks} > 0`),
+    check('runs_hash_len', sql`octet_length(${t.finalStateHash}) = 8`),
+  ],
+);
 
 export const scoreSubmissions = pgTable('score_submissions', {
   runId: uuid('run_id')
@@ -203,7 +263,9 @@ export const verifiedResults = pgTable(
       .unique()
       .references(() => runs.id),
     score: bigint('score', { mode: 'bigint' }).notNull(),
-    tiebreakMetrics: jsonb('tiebreak_metrics').notNull().default(sql`'{}'::jsonb`),
+    tiebreakMetrics: jsonb('tiebreak_metrics')
+      .notNull()
+      .default(sql`'{}'::jsonb`),
     achievedAt: timestamp('achieved_at', { withTimezone: true }).notNull(),
     ...timestamps,
   },
@@ -284,7 +346,9 @@ export const auditEvents = pgTable('audit_events', {
   actor: uuid('actor'),
   action: text('action').notNull(),
   target: text('target').notNull(),
-  requestMeta: jsonb('request_meta').notNull().default(sql`'{}'::jsonb`),
+  requestMeta: jsonb('request_meta')
+    .notNull()
+    .default(sql`'{}'::jsonb`),
   ...timestamps,
 });
 
@@ -324,8 +388,15 @@ export const schema = {
   seedPolicy,
   snapshotScope,
   profileStatus,
+  profileRole,
+  seasonEntryPolicy,
+  ugcReportStatus,
+  moderationActionType,
   profiles,
   seasons,
+  rankedInvites,
+  ugcReports,
+  moderationActions,
   games,
   gameVersions,
   seasonGames,

@@ -15,6 +15,13 @@
       "when": 1787067695385,
       "tag": "0001_gigantic_blade",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787091000000,
+      "tag": "0002_spec5_compliance",
+      "breakpoints": true
     }
   ]
 }

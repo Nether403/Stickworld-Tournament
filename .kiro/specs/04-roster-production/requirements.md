@@ -1,6 +1,6 @@
 # Spec 4 — Roster Production (games 3–10)
 
-**Status:** approved 2026-08-18; executed (Waves A–D on `cursor/spec-4-full-depth-bda1`). Do not start Spec 5 until this PR merges and Spec 5 is separately approved.
+**Status:** executed; merged ([PR #4](https://github.com/Nether403/Stickworld-Tournament/pull/4)). Spec 5 deepening is a separate approval (ADR-0007).
 **Depth:** complete (design.md + tasks.md match Spec 1/2/3 style)
 **Covers:** Plan tasks 15–18
 **Depends on:** Spec 3 merged (PR #3); Branch A (ADR-0001)
@@ -143,8 +143,10 @@ and those disagree, the game doc wins.
 ### R6 — Roster-wide invariants
 
 1. Every game SHALL produce exactly one integer `ranked_score`, higher always
-   better. Time is a bonus, never a ranking key. Championship still uses all
-   ten (or nine if Demolition is cut) at 0–1,000 each (`docs/competitive-spec.md` §11).
+   better. Time is a bonus, never a ranking key. Championship uses **fixed-course**
+   games only (ADR-0006). After Wave D that is nine titles / 9,000 max because
+   Pogo Tower is weekly-seed; Demolition Dive shipped. Spec 5 amends
+   `docs/competitive-spec.md` §11 to match.
 2. Every game SHALL declare a physics budget and assert it every step in
    test/dev.
 3. Touch: one tap, two buttons, or drag-and-release, as the roster table.

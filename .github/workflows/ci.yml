@@ -22,8 +22,11 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: node scripts/check-forbidden-names.mjs
+      - run: node --test scripts/asset-pipeline.test.mjs
+      - run: node scripts/check-asset-ledger.mjs
       - run: node scripts/check-game-integration.mjs
       - run: pnpm build
+      - run: node scripts/check-no-runtime-ai.mjs
       - run: node scripts/check-play-bundle.mjs
       - run: pnpm typecheck
       - run: pnpm test
@@ -64,6 +67,7 @@ jobs:
       - run: pnpm --filter @stickworld/game-balance-bike-blitz score:browser
       - run: pnpm --filter @stickworld/game-cargo-chaos score:browser
       - run: pnpm --filter @stickworld/game-demolition-dive score:browser
+      - run: pnpm --filter @stickworld/web exec playwright install --with-deps firefox webkit
       - run: pnpm --filter @stickworld/web e2e
 
   negative:

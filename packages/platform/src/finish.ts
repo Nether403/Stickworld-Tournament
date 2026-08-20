@@ -5,6 +5,7 @@ import {
   runs,
   scoreSubmissions,
   seasonGames,
+  seasons,
   verificationJobs,
   type Database,
 } from '@stickworld/db';
@@ -22,6 +23,7 @@ import {
 } from './cheap-checks.js';
 import type { PlatformContext } from './context.js';
 import { ApiError } from './errors.js';
+import type { ReasonCode } from './reason-codes.js';
 import { FINISH_RATE_USER_PER_MIN } from './limits.js';
 import { floorWindow, hitRateLimit } from './rate-limit.js';
 import { unpackSeed, uuidToBytes } from './seed128.js';
@@ -34,11 +36,19 @@ export interface FinishInput {
   claimedScore: string;
 }
 
+export interface FinishResult {
+  runId: string;
+  status: 'pending';
+  gameId: string;
+  gameVersion: string;
+  seasonId: string;
+}
+
 export async function finishAttempt(
   db: Database,
   ctx: PlatformContext,
   input: FinishInput,
-): Promise<{ runId: string; status: 'pending' }> {
+): Promise<FinishResult> {
   const now = ctx.clock.now();
   await hitRateLimit(
     db,
@@ -70,15 +80,20 @@ export async function finishAttempt(
   if (payload.attemptId !== input.attemptId) throw new ApiError('TOKEN_INVALID');
   if (payload.userId !== input.userId) throw new ApiError('ATTEMPT_NOT_FOUND', 'WRONG_USER');
 
-  const attempt = await db
+  const attemptWithSeason = await db
     .select()
     .from(attempts)
+    .innerJoin(seasonGames, eq(seasonGames.id, attempts.seasonGameId))
+    .innerJoin(seasons, eq(seasons.id, seasonGames.seasonId))
     .where(eq(attempts.id, input.attemptId))
     .then((r) => r[0]);
-  if (!attempt) throw new ApiError('ATTEMPT_NOT_FOUND');
+  if (!attemptWithSeason) throw new ApiError('ATTEMPT_NOT_FOUND');
+  const attempt = attemptWithSeason.attempts;
   if (attempt.userId !== input.userId) throw new ApiError('ATTEMPT_NOT_FOUND', 'WRONG_USER');
+  if (attemptWithSeason.seasons.status !== 'active') throw new ApiError('SEASON_INACTIVE');
   if (attempt.status === 'submitted' || attempt.consumedAt) throw new ApiError('ATTEMPT_CONSUMED');
-  if (attempt.status === 'expired' || attempt.expiresAt <= now) throw new ApiError('ATTEMPT_EXPIRED');
+  if (attempt.status === 'expired' || attempt.expiresAt <= now)
+    throw new ApiError('ATTEMPT_EXPIRED');
   if (attempt.gameVersionId !== payload.gameVersionId) throw new ApiError('WRONG_VERSION');
 
   const version = await db
@@ -96,7 +111,7 @@ export async function finishAttempt(
   if (!sg) throw new ApiError('SEASON_INACTIVE');
 
   const decoded = await decodeReplay(replayBytes);
-  if (!decoded.ok) throw new ApiError(decoded.error.code as 'BAD_MAGIC');
+  if (!decoded.ok) throw new ApiError(decoded.error.code as ReasonCode);
 
   const config = version.configJson as { maxRunTicks?: number };
   const maxTicks = config.maxRunTicks ?? 600;
@@ -124,6 +139,14 @@ export async function finishAttempt(
   hashBytes.writeBigUInt64LE(decoded.header.finalStateHash);
 
   await db.transaction(async (tx) => {
+    const lockedSeason = await tx
+      .select({ status: seasons.status })
+      .from(seasons)
+      .where(eq(seasons.id, attemptWithSeason.seasons.id))
+      .for('update')
+      .then((rows) => rows[0]);
+    if (lockedSeason?.status !== 'active') throw new ApiError('SEASON_INACTIVE');
+
     const updated = await tx
       .update(attempts)
       .set({ status: 'submitted', consumedAt: now })
@@ -149,5 +172,11 @@ export async function finishAttempt(
     });
   });
   await audit(db, { actor: input.userId, action: 'attempt.finish', target: runId });
-  return { runId, status: 'pending' };
+  return {
+    runId,
+    status: 'pending',
+    gameId: sg.games.slug,
+    gameVersion: version.gameVersion,
+    seasonId: attemptWithSeason.seasons.id,
+  };
 }

@@ -14,6 +14,7 @@ export function normalizeHandle(
     return { ok: false, code: 'HANDLE_INVALID' };
   }
   if (!HANDLE_PATTERN.test(handle)) return { ok: false, code: 'HANDLE_INVALID' };
+  if (/^d-[0-9a-f]{12,13}$/.test(handle)) return { ok: false, code: 'HANDLE_INVALID' };
   if (RESERVED.has(handle)) return { ok: false, code: 'HANDLE_INVALID' };
   return { ok: true, handle };
 }
