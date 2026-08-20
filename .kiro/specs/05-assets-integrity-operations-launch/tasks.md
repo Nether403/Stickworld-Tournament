@@ -139,11 +139,11 @@ ref 22.
       (`packages/db` journal vs `drizzle/*.sql`). _(R5.2)_
 - [x] 5.4 `docs/ops/neon.md` restates autosuspend = 0. `docs/ops/metrics.md`
       SQL. `docs/ops/rollback.md`. _(R5.5, R5.7)_
-- [ ] 5.5 Staging broken-deploy demo: health 500 → rollback → 200. Record
+- [x] 5.5 Staging broken-deploy demo: health 500 → rollback → 200. Record
       evidence in the Task 5 PR body. _(R5.5)_
 - [x] 5.6 PITR restore demo per `docs/ops/pitr-restore.md`. Ranking
       rebuild checksum. _(R5.6)_
-- [ ] 5.7 Confirm production web/worker env does not list Gemini/Deepgram/
+- [x] 5.7 Confirm production web/worker env does not list Gemini/Deepgram/
       OpenRouter keys (checklist in railway.md). _(R5.9)_
 
 **Demo:** health 200; one JSON telemetry line in Railway logs; rollback

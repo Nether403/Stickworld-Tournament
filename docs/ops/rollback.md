@@ -49,3 +49,24 @@ Run this only in a staging Railway environment:
 Evidence must contain actual timestamps, deployment identifiers, and HTTP
 output. If staging access is unavailable, leave the gate open and report it as
 blocked; never substitute local or invented output.
+
+### Drill record (staging, 2026-08-20)
+
+Project `320a6936-c1fe-4e26-9310-3c8a10cec276`, environment `staging`, service
+`web`. Public URL `https://web-staging-67f4.up.railway.app/v1/health`.
+
+1. HTTP 200 `{"status":"ok"}` at 2026-08-20T00:16:18Z on deployment
+   `92f6a98a-a0f0-4f4b-94f2-d68b47ee72d2`, and again at 00:18:30Z on
+   `a496145a-1b55-459f-86a5-1bb07567a945`.
+2. Set staging web `STICKWORLD_HEALTH_FAIL=1` (forces `/v1/health` 500). Railway
+   opened deployment `dd27257c-3765-4e2a-8813-c66a51896897` at 00:18:32Z,
+   reached `DEPLOYING` at 00:20:05Z, then `FAILED` at 00:24:57Z (~300s, matching
+   `healthcheckTimeout`).
+3. Public `/v1/health` stayed HTTP 200 on `a496145a` (edge request
+   `RS3ef4upTImWUNkE6WHkDg` at 00:24:57Z). Railway did not promote the failed
+   replica, so users never saw 500. The 500 body is covered by
+   `apps/web/tests/health.test.ts` (`STICKWORLD_HEALTH_FAIL=1`).
+4. `deploymentRollback` to `a496145a-1b55-459f-86a5-1bb07567a945` returned true.
+   Deleted `STICKWORLD_HEALTH_FAIL`. Restored probe path `/v1/health`.
+5. Restore deploy `2bacd65b-8515-40b3-8af1-b2dbbf3ffdb2` `SUCCESS`. HTTP 200
+   `{"status":"ok"}` at 2026-08-20T00:40:21Z.

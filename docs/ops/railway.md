@@ -27,6 +27,25 @@ two-way check.
 Do not create a Railway domain or TCP proxy for the worker. It does not bind an
 HTTP server. Railway should probe only the web service at `/v1/health`.
 
+Staging-only drill: set web `STICKWORLD_HEALTH_FAIL=1` to make `/v1/health`
+return HTTP 500 without changing code. Never set that variable in production.
+Railway will refuse to promote that revision while the probe path is
+`/v1/health`.
+
+## Live project (2026-08-20)
+
+Workspace **Dutch Data Labs**. Railway project `Stickworld-Tournament`
+(`320a6936-c1fe-4e26-9310-3c8a10cec276`).
+
+| Environment | ID | Notes |
+| ----------- | -- | ----- |
+| production  | `4a64c20d-e199-4077-ad55-fe948dc9bb04` | Services configured; Spec 5 image not deployed yet. Neon default branch still on migrations `0000`/`0001`. |
+| staging     | `6f0c29de-4c8e-435a-9cec-687a2df11ecd` | Web/worker/cron deployed from Spec 5. Neon branch `railway-staging` (`br-ancient-forest-awwzmbt6`) has `0002_spec5_compliance`. |
+
+Services: `web` (public), `worker` (no public domain), `cron-recompute` (`0 * * * *`),
+`cron-daily` (`5 0 * * *`). Staging web:
+`https://web-staging-67f4.up.railway.app`.
+
 Browser-side `host.start` and `host.finish` events cannot appear in Railway
 stdout because the game host runs in the user's browser, not in a Railway Node
 process. This repository intentionally has no browser telemetry POST or beacon
@@ -47,13 +66,17 @@ the repository.
 Before every production release, inspect the effective variables, including
 shared/project-level variables:
 
-- [ ] Production web does not list `GEMINI_API_KEY`.
-- [ ] Production web does not list `DEEPGRAM_API_KEY`.
-- [ ] Production web does not list `OPENROUTER_API_KEY`.
-- [ ] Production worker does not list `GEMINI_API_KEY`.
-- [ ] Production worker does not list `DEEPGRAM_API_KEY`.
-- [ ] Production worker does not list `OPENROUTER_API_KEY`.
-- [ ] Telemetry is enabled on web, worker, and cron.
+- [x] Production web does not list `GEMINI_API_KEY`.
+- [x] Production web does not list `DEEPGRAM_API_KEY`.
+- [x] Production web does not list `OPENROUTER_API_KEY`.
+- [x] Production worker does not list `GEMINI_API_KEY`.
+- [x] Production worker does not list `DEEPGRAM_API_KEY`.
+- [x] Production worker does not list `OPENROUTER_API_KEY`.
+- [x] Telemetry is enabled on web, worker, and cron.
+
+Listed 2026-08-20 with `railway variable list` on production and staging `web` /
+`worker` / cron services. Forbidden AI keys were absent. `STICKWORLD_TELEMETRY=1`
+was present. Staging `web` also had no `STICKWORLD_HEALTH_FAIL` after the drill.
 
 Do not check these boxes from repository inspection. They require a live
 Railway environment-variable listing.
